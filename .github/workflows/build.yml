@@ -1,0 +1,43 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Derle ve paketle
+        shell: pwsh
+        run: ./build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CircleMixRecord
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+
+      - name: GitHub Release oluştur (yalnızca v* etiketinde)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = (Get-Content version.txt -Raw).Trim()
+          if ($tag -ne "v$ver") { throw "Etiket ($tag) version.txt ($ver) ile uyuşmuyor" }
+          gh release create $tag (Get-ChildItem dist/*.zip) dist/SHA256SUMS.txt --title "CircleMixRecord $tag" --notes-file dist/RELEASE_NOTES.md

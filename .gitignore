@@ -1,0 +1,15 @@
+bin/
+obj/
+dist/
+publish_single/
+publish_temp/
+Kayitlar_ve_Projeler/
+.vs/
+*.user
+*.suo
+*.mp4
+*.mkv
+*.mov
+*.wav
+*.cmrproj
+*.cmrproj.sql
