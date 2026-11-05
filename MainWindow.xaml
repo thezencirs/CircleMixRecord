@@ -1,9 +1,9 @@
 <Window x:Class="CircleMixRecord.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Circle Mix Record — Studio by thezencirs"
+        Title="Circle — Studio by thezencirs"
         Width="1560" Height="920"
-        MinWidth="1180" MinHeight="720"
+        MinWidth="1160" MinHeight="700"
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
         Icon="pack://application:,,,/CircleMixRecord.ico"
@@ -13,13 +13,13 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="58"/>
+            <RowDefinition Height="54"/>
             <RowDefinition Height="*"/>
-            <RowDefinition x:Name="RowTimeline" Height="245"/>
+            <RowDefinition x:Name="RowTimeline" Height="220"/>
         </Grid.RowDefinitions>
 
-        <!-- ======================= ÜST CIRCLE STÜDYO ÇUBUĞU (#261A66 • #EF5F18 • #FFFFFF | SIFIR ÇAKIŞMA) ======================= -->
-        <Border Grid.Row="0" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="0,0,0,1" Padding="14,0">
+        <!-- ======================= ÜST MINIMAL BAR (APPLE STUDIO LAYOUT) ======================= -->
+        <Border Grid.Row="0" Background="#1C134C" BorderBrush="#342580" BorderThickness="0,0,0,1" Padding="18,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -27,156 +27,148 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Sol: Circle Logosu (#261A66 + #EF5F18 + #FFFFFF), Başlık & Alt Satırda Birleşik Sağlık/GPU Bilgisi (Çakışma Yok!) -->
+                <!-- Sol: Minimal Circle Logosu, Marka & Tek Satır Durum Kapsülü -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="36" Height="36" CornerRadius="10" Margin="0,0,10,0" Background="#261A66" BorderBrush="#EF5F18" BorderThickness="1.8">
+                    <Border Width="30" Height="30" CornerRadius="8" Margin="0,0,10,0" Background="#261A66" BorderBrush="#EF5F18" BorderThickness="1.5">
                         <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Ellipse Width="22" Height="22" Stroke="#FFFFFF" StrokeThickness="2.4"/>
-                            <Ellipse Width="10" Height="10" Fill="#EF5F18"/>
+                            <Ellipse Width="18" Height="18" Stroke="#FFFFFF" StrokeThickness="2"/>
+                            <Ellipse Width="7" Height="7" Fill="#EF5F18"/>
                         </Grid>
                     </Border>
 
-                    <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="CIRCLE MIX RECORD" FontWeight="ExtraBold" FontSize="14" Foreground="#FFFFFF"/>
-                            <TextBlock Text="  by thezencirs" FontWeight="Bold" FontSize="10.5" Foreground="#EF5F18" VerticalAlignment="Bottom" Margin="0,0,0,1"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="TxtEncoderBadge" Text="Circle GPU Engine" FontSize="10.5" Foreground="#C5BEE8"/>
-                            <TextBlock Text="  •  " FontSize="10.5" Foreground="#EF5F18" FontWeight="Bold"/>
-                            <TextBlock x:Name="TxtHealthBadge" Text="Sağlık: 100/100 (2.4ms)" FontWeight="Bold" FontSize="10.5" Foreground="#FFFFFF"/>
-                        </StackPanel>
-                    </StackPanel>
+                    <TextBlock Text="Circle" FontWeight="Bold" FontSize="15.5" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                    <TextBlock Text="by thezencirs" FontSize="11" Foreground="#B8B0DC" VerticalAlignment="Center" Margin="7,1,16,0"/>
 
-                    <Border x:Name="BdrRecBadge" Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="7" Padding="10,4" VerticalAlignment="Center">
+                    <!-- Minimal Canlı Sayaç & Sağlık Kapsülü -->
+                    <Border x:Name="BdrRecBadge" Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="8" Padding="10,4" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse x:Name="DotRecStatus" Width="8" Height="8" Fill="#EF5F18" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock x:Name="TxtRecTimer" Text="HAZIR  00:00:00" FontWeight="Bold" FontSize="11" Foreground="#FFFFFF"/>
+                            <Ellipse x:Name="DotRecStatus" Width="7" Height="7" Fill="#FFFFFF" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                            <TextBlock x:Name="TxtRecTimer" Text="00:00:00" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11.5" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                            <TextBlock Text="  •  " FontSize="10.5" Foreground="#342580" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtHealthBadge" Text="100%" FontSize="11" Foreground="#B8B0DC" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtEncoderBadge" Text="" Visibility="Collapsed"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
 
-                <!-- Orta: 4 Adımlı Circle Mod Seçici (Kompakt & Şık Segment Bar) -->
-                <Border Grid.Column="1" Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="9" Padding="3" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- Orta: Apple Tarzı Numarasız, Yalın Segmented Control -->
+                <Border Grid.Column="1" Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="10" Padding="3" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal">
-                        <Button x:Name="BtnModeHome" Content="1. Başlangıç" Click="BtnModeHome_Click"
-                                Background="#EF5F18" BorderBrush="#FFFFFF" Padding="13,5" Margin="1,0"/>
-                        <Button x:Name="BtnModeRecord" Content="2. Circle Kayıt &amp; Meet" Click="BtnModeRecord_Click"
-                                Background="#261A66" BorderBrush="#3B2A94" Padding="13,5" Margin="1,0"/>
-                        <Button x:Name="BtnModeEdit" Content="3. Circle Edit &amp; Timelapse" Click="BtnModeEdit_Click"
-                                Background="#261A66" BorderBrush="#3B2A94" Padding="13,5" Margin="1,0"/>
-                        <Button x:Name="BtnModeSocial" Content="4. Circle Paylaşım" Click="BtnModeSocial_Click"
-                                Background="#261A66" BorderBrush="#3B2A94" Padding="13,5" Margin="1,0"/>
+                        <Button x:Name="BtnModeRecord" Content="Stüdyo" Click="BtnModeRecord_Click"
+                                Background="#EF5F18" BorderBrush="#EF5F18" Padding="18,5" Margin="1,0"/>
+                        <Button x:Name="BtnModeEdit" Content="Kurgu" Click="BtnModeEdit_Click"
+                                Background="#261A66" BorderBrush="Transparent" Padding="18,5" Margin="1,0"/>
+                        <Button x:Name="BtnModeHome" Content="Genel Bakış" Click="BtnModeHome_Click"
+                                Background="#261A66" BorderBrush="Transparent" Padding="16,5" Margin="1,0"/>
+                        <Button x:Name="BtnModeSocial" Content="Paylaş" Click="BtnModeSocial_Click"
+                                Background="#261A66" BorderBrush="Transparent" Padding="18,5" Margin="1,0"/>
                     </StackPanel>
                 </Border>
 
-                <!-- Sağ: Kısayollar, Detay Görünüm & Klasör -->
+                <!-- Sağ: Yalın Yardımcı Araçlar -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="Kısayollar &amp; Hakkında" Click="BtnShowShortcuts_Click"
-                            Background="#261A66" BorderBrush="#3B2A94" Padding="10,5" Margin="0,0,6,0"/>
-                    <CheckBox x:Name="ChkProView" Content="Detay Paneller" IsChecked="False"
+                    <CheckBox x:Name="ChkProView" Content="Denetçi" IsChecked="False"
                               Checked="ChkProView_Changed" Unchecked="ChkProView_Changed"
-                              VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
-                    <Button Content="Dosya Aç" Click="BtnOpenProject_Click" Padding="10,5" Margin="0,0,5,0"/>
-                    <Button Content="Klasör" Click="BtnOpenFolder_Click" Padding="10,5"/>
+                              VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#B8B0DC"
+                              ToolTip="Sahne, Ses, Kadraj ve Circle Meet denetçi panellerini göster/gizle"/>
+                    <Button Content="Aç" Click="BtnOpenProject_Click" Padding="12,5" Margin="0,0,6,0" ToolTip="Video veya proje dosyası aç"/>
+                    <Button Content="Klasör" Click="BtnOpenFolder_Click" Padding="12,5" Margin="0,0,6,0" ToolTip="Kayıt klasörünü aç"/>
+                    <Button Content="?" Click="BtnShowShortcuts_Click" Width="30" Padding="0,5" ToolTip="Kısayollar ve Hakkında (thezencirs)"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ======================= ORTA ANA ÇALIŞMA ALANI (SOL / ORTA / SAĞ) ======================= -->
-        <Grid Grid.Row="1" Margin="8,8,8,4">
+        <!-- ======================= ORTA ANA ÇALIŞMA ALANI ======================= -->
+        <Grid Grid.Row="1" Margin="12,12,12,6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="ColLeftPanel" Width="0"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition x:Name="ColRightPanel" Width="0"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 1A. SOL PANEL (KAYIT MODU): CIRCLE SAHNELER, KAMERA VE SES MİKSERİ -->
-            <Border x:Name="BdrLeftPanel" Grid.Column="0" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,6,0" Visibility="Collapsed">
+            <!-- 1A. SOL DENETÇİ (STÜDYO MODU): SAHNE, KAMERA VE SES -->
+            <Border x:Name="BdrLeftPanel" Grid.Column="0" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Padding="14" Margin="0,0,10,0" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="CIRCLE SAHNELER" FontWeight="Bold" FontSize="11.5" Foreground="#EF5F18" Margin="0,0,0,6"/>
-                        <ListBox x:Name="LstScenes" Background="#140E38" BorderBrush="#3B2A94" Foreground="#FFFFFF"
-                                 Height="138" SelectionChanged="LstScenes_SelectionChanged" SelectedIndex="0" Margin="0,0,0,12">
-                            <ListBoxItem Content="1. Eğitim + Köşe Ayna Kamera (Dual)" Padding="6,5"/>
-                            <ListBoxItem Content="2. Canlı Toplantı (Circle Meet + Katılımcılar)" Padding="6,5"/>
-                            <ListBoxItem Content="3. Tam Ekran 3D / CAD Modelleme" Padding="6,5"/>
-                            <ListBoxItem Content="4. Dikey Split (Üst Ekran + Alt Kamera)" Padding="6,5"/>
-                            <ListBoxItem Content="5. Sadece Eğitmen Kamerası" Padding="6,5"/>
+                        <TextBlock Text="Sahneler" FontWeight="SemiBold" FontSize="12" Foreground="#B8B0DC" Margin="0,0,0,6"/>
+                        <ListBox x:Name="LstScenes" Background="#140E38" BorderBrush="#342580" Foreground="#FFFFFF"
+                                 Height="132" SelectionChanged="LstScenes_SelectionChanged" SelectedIndex="0" Margin="0,0,0,14">
+                            <ListBoxItem Content="Eğitim + Köşe Kamera" Padding="8,5"/>
+                            <ListBoxItem Content="Canlı Toplantı (Circle Meet)" Padding="8,5"/>
+                            <ListBoxItem Content="Tam Ekran Çalışma" Padding="8,5"/>
+                            <ListBoxItem Content="Dikey Split (Ekran + Kamera)" Padding="8,5"/>
+                            <ListBoxItem Content="Sadece Kamera" Padding="8,5"/>
                         </ListBox>
 
-                        <TextBlock Text="KAMERA &amp; MİKROFON" FontWeight="Bold" FontSize="11.5" Foreground="#EF5F18" Margin="0,0,0,6"/>
-                        <TextBlock Text="Kamera Seçimi:" FontSize="11" Foreground="#C5BEE8" Margin="0,0,0,3"/>
+                        <TextBlock Text="Kamera &amp; Ses Girişi" FontWeight="SemiBold" FontSize="12" Foreground="#B8B0DC" Margin="0,0,0,6"/>
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <ComboBox x:Name="CmbCameras" Grid.Column="0" Height="28" SelectionChanged="CmbCameras_SelectionChanged"/>
-                            <Button Grid.Column="1" Content="Yenile" ToolTip="Cihazları Yenile" Click="BtnRefreshDevices_Click" Margin="4,0,0,0" Padding="8,2"/>
+                            <Button Grid.Column="1" Content="↻" ToolTip="Cihazları Yenile" Click="BtnRefreshDevices_Click" Margin="5,0,0,0" Padding="9,2"/>
                         </Grid>
 
-                        <TextBlock Text="Mikrofon Seçimi:" FontSize="11" Foreground="#C5BEE8" Margin="0,0,0,3"/>
-                        <ComboBox x:Name="CmbMicrophones" Height="28" Margin="0,0,0,8"/>
+                        <ComboBox x:Name="CmbMicrophones" Height="28" Margin="0,0,0,10"/>
 
-                        <CheckBox x:Name="ChkShowScreen" Content="Masaüstü Ekran Yakalama" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
-                        <CheckBox x:Name="ChkShowWebcam" Content="Köşe Kamera (Alt+Shift+C)" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
-                        <CheckBox x:Name="ChkMirrorWebcam" Content="Ayna Kamera (Sağa Dönünce Sağa)" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
-                        <CheckBox x:Name="ChkNaturalWb" Content="Doğal Beyaz Dengesi" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
-                        <CheckBox x:Name="ChkShowMeetTiles" Content="Circle Meet Katılımcılarını Kayda Ekle" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
-                        <CheckBox x:Name="ChkRecord4K" Content="16:9 Kaydı 4K UHD (3840x2160) Üret" IsChecked="False" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
+                        <CheckBox x:Name="ChkShowScreen" Content="Ekran Yakalama" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
+                        <CheckBox x:Name="ChkShowWebcam" Content="Köşe Kamera" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
+                        <CheckBox x:Name="ChkMirrorWebcam" Content="Ayna Görünümü" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
+                        <CheckBox x:Name="ChkNaturalWb" Content="Doğal Renk Dengesi" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
+                        <CheckBox x:Name="ChkShowMeetTiles" Content="Toplantı Katılımcılarını Göster" IsChecked="True" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
+                        <CheckBox x:Name="ChkRecord4K" Content="4K UHD (3840×2160) Kayıt" IsChecked="False" Checked="SourceOptions_Changed" Unchecked="SourceOptions_Changed"/>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,2">
-                            <TextBlock Text="Köşe Kamera Boyutu:" FontSize="11" Foreground="#C5BEE8" Width="135"/>
-                            <TextBlock x:Name="TxtCamScaleVal" Text="%22" FontSize="11" FontWeight="Bold" Foreground="#EF5F18"/>
-                        </StackPanel>
-                        <Slider x:Name="SldCamScale" Minimum="14" Maximum="38" Value="22" ValueChanged="SldCamScale_ValueChanged" Margin="0,0,0,12"/>
+                        <Grid Margin="0,8,0,2">
+                            <TextBlock Text="Kamera Boyutu" FontSize="11.5" Foreground="#B8B0DC"/>
+                            <TextBlock x:Name="TxtCamScaleVal" Text="%22" FontSize="11.5" FontWeight="SemiBold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Slider x:Name="SldCamScale" Minimum="14" Maximum="38" Value="22" ValueChanged="SldCamScale_ValueChanged" Margin="0,0,0,14"/>
 
-                        <Separator Background="#3B2A94" Margin="0,4,0,10"/>
+                        <Separator Background="#342580" Margin="0,2,0,12"/>
 
-                        <TextBlock Text="CIRCLE AYRIK SES KANALLARI" FontWeight="Bold" FontSize="11.5" Foreground="#EF5F18" Margin="0,0,0,8"/>
+                        <TextBlock Text="Ses Seviyeleri" FontWeight="SemiBold" FontSize="12" Foreground="#B8B0DC" Margin="0,0,0,8"/>
 
-                        <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="9" Margin="0,0,0,8">
+                        <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,0,0,8">
                             <StackPanel>
-                                <Grid Margin="0,0,0,4">
-                                    <TextBlock Text="Kanal 1: Mikrofon" FontSize="11.5" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtMicDb" Text="-60 dB" FontSize="11" Foreground="#FFFFFF" HorizontalAlignment="Right"/>
+                                <Grid Margin="0,0,0,5">
+                                    <TextBlock Text="Mikrofon" FontSize="11.5" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="TxtMicDb" Text="-60 dB" FontSize="11" Foreground="#B8B0DC" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <ProgressBar x:Name="BarMicLevel" Minimum="0" Maximum="60" Value="8" Height="7" Foreground="#EF5F18" Background="#140E38" BorderThickness="0" Margin="0,0,0,6"/>
-                                <CheckBox x:Name="ChkMuteMic" Content="Mikrofonu Sustur" Checked="ChkMuteAudio_Changed" Unchecked="ChkMuteAudio_Changed" Margin="0"/>
+                                <ProgressBar x:Name="BarMicLevel" Minimum="0" Maximum="60" Value="8" Height="5" Foreground="#EF5F18" Background="#261A66" BorderThickness="0" Margin="0,0,0,6"/>
+                                <CheckBox x:Name="ChkMuteMic" Content="Sessize Al" Checked="ChkMuteAudio_Changed" Unchecked="ChkMuteAudio_Changed" Margin="0"/>
                             </StackPanel>
                         </Border>
 
-                        <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="9">
+                        <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" Padding="10">
                             <StackPanel>
-                                <Grid Margin="0,0,0,4">
-                                    <TextBlock Text="Kanal 2: Sistem Sesi" FontSize="11.5" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtSysDb" Text="-60 dB" FontSize="11" Foreground="#FFFFFF" HorizontalAlignment="Right"/>
+                                <Grid Margin="0,0,0,5">
+                                    <TextBlock Text="Masaüstü Sesi" FontSize="11.5" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="TxtSysDb" Text="-60 dB" FontSize="11" Foreground="#B8B0DC" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <ProgressBar x:Name="BarSysLevel" Minimum="0" Maximum="60" Value="4" Height="7" Foreground="#FFFFFF" Background="#140E38" BorderThickness="0" Margin="0,0,0,6"/>
-                                <CheckBox x:Name="ChkMuteSys" Content="Sistem Sesini Sustur" Checked="ChkMuteAudio_Changed" Unchecked="ChkMuteAudio_Changed" Margin="0"/>
+                                <ProgressBar x:Name="BarSysLevel" Minimum="0" Maximum="60" Value="4" Height="5" Foreground="#FFFFFF" Background="#261A66" BorderThickness="0" Margin="0,0,0,6"/>
+                                <CheckBox x:Name="ChkMuteSys" Content="Sessize Al" Checked="ChkMuteAudio_Changed" Unchecked="ChkMuteAudio_Changed" Margin="0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
 
-            <!-- 1B. SOL PANEL (CIRCLE EDIT MODU): AÇIK YATAY & DİKEY KLASÖRLER + SÜRÜKLE BIRAK MEDYA HAVUZU -->
-            <Border x:Name="BdrCapCutMediaPool" Grid.Column="0" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="10" Padding="10" Margin="0,0,6,0" Visibility="Collapsed"
+            <!-- 1B. SOL MEDYA KÜTÜPHANESİ (KURGU MODU): YALIN YATAY & DİKEY KLASÖRLER -->
+            <Border x:Name="BdrCapCutMediaPool" Grid.Column="0" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Padding="12" Margin="0,0,10,0" Visibility="Collapsed"
                     AllowDrop="True" DragOver="CapCutDropZone_DragOver" Drop="CapCutDropZone_Drop">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Üst: Circle Medya Havuzu Başlığı & Boş Proje Butonu -->
-                    <StackPanel Grid.Row="0" Margin="0,0,0,8">
-                        <Grid Margin="0,0,0,6">
-                            <TextBlock Text="CIRCLE MEDYA &amp; KLASÖRLER" FontWeight="ExtraBold" FontSize="12" Foreground="#FFFFFF" VerticalAlignment="Center"/>
-                            <Button Content="Yenile" Click="BtnRefreshCapCutFolders_Click" HorizontalAlignment="Right" Padding="7,3" FontSize="10.5"/>
+                    <!-- Üst: Medya Kütüphanesi Başlığı & Aksiyonlar -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                        <Grid Margin="0,0,0,8">
+                            <TextBlock Text="Medya Kütüphanesi" FontWeight="SemiBold" FontSize="13" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                            <Button Content="↻" ToolTip="Klasörleri Yenile" Click="BtnRefreshCapCutFolders_Click" HorizontalAlignment="Right" Padding="8,2" FontSize="11"/>
                         </Grid>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -184,27 +176,25 @@
                                 <ColumnDefinition Width="6"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0" Content="Boş Circle Kurgu" Click="BtnCapCutNewBlank_Click"
-                                    Background="#261A66" BorderBrush="#3B2A94" Padding="6,6" FontSize="11"/>
-                            <Button Grid.Column="2" Content="Dışarıdan Ekle" Click="BtnImportExternalToPool_Click"
-                                    Background="#EF5F18" BorderBrush="#FFFFFF" Padding="6,6" FontSize="11"/>
+                            <Button Grid.Column="0" Content="Yeni Proje" Click="BtnCapCutNewBlank_Click"
+                                    Background="#261A66" BorderBrush="#342580" Padding="8,6" FontSize="11.5"/>
+                            <Button Grid.Column="2" Content="+ İçe Aktar" Click="BtnImportExternalToPool_Click"
+                                    Background="#EF5F18" BorderBrush="#EF5F18" Padding="8,6" FontSize="11.5"/>
                         </Grid>
                     </StackPanel>
 
-                    <!-- Açık Klasör 1: YATAY (16:9) KAYITLAR KLASÖRÜ -->
-                    <Border Grid.Row="1" Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,6">
+                    <!-- Yatay (16:9) Kayıtlar -->
+                    <Border Grid.Row="1" Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="10" Padding="10" Margin="0,0,0,8">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" Margin="0,0,0,2">
-                                <TextBlock Text="YATAY (16:9) KLASÖRÜ" FontWeight="Bold" FontSize="11" Foreground="#EF5F18" VerticalAlignment="Center"/>
-                                <Button Content="Klasörü Aç" Click="BtnOpenHorizFolder_Click" HorizontalAlignment="Right" Padding="7,2" FontSize="10" Background="#1C134C"/>
+                            <Grid Grid.Row="0" Margin="0,0,0,6">
+                                <TextBlock Text="Yatay  16:9" FontWeight="SemiBold" FontSize="11.5" Foreground="#B8B0DC" VerticalAlignment="Center"/>
+                                <Button Content="Klasör" Click="BtnOpenHorizFolder_Click" HorizontalAlignment="Right" Padding="8,2" FontSize="10.5"/>
                             </Grid>
-                            <TextBlock Grid.Row="1" Text="Sürükleyip sağa/timeline'a bırakın veya çift tıklayın:" FontSize="10" Foreground="#C5BEE8" Margin="0,0,0,4"/>
-                            <ListBox x:Name="LstHorizFolderFiles" Grid.Row="2" Background="#140E38" BorderBrush="#3B2A94" Foreground="#FFFFFF" FontSize="11"
+                            <ListBox x:Name="LstHorizFolderFiles" Grid.Row="1" Background="Transparent" BorderThickness="0" Foreground="#FFFFFF" FontSize="11"
                                      MouseDoubleClick="LstHorizFolderFiles_MouseDoubleClick"
                                      SelectionChanged="LstHorizFolderFiles_SelectionChanged"
                                      PreviewMouseLeftButtonDown="FolderList_PreviewMouseLeftButtonDown"
@@ -212,37 +202,29 @@
                         </Grid>
                     </Border>
 
-                    <!-- Açık Klasör 2: DİKEY (9:16) KAYITLAR KLASÖRÜ -->
-                    <Border Grid.Row="2" Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,6">
+                    <!-- Dikey (9:16) Kayıtlar -->
+                    <Border Grid.Row="2" Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="10" Padding="10">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" Margin="0,0,0,2">
-                                <TextBlock Text="DİKEY (9:16) KLASÖRÜ" FontWeight="Bold" FontSize="11" Foreground="#EF5F18" VerticalAlignment="Center"/>
-                                <Button Content="Klasörü Aç" Click="BtnOpenVertFolder_Click" HorizontalAlignment="Right" Padding="7,2" FontSize="10" Background="#1C134C"/>
+                            <Grid Grid.Row="0" Margin="0,0,0,6">
+                                <TextBlock Text="Dikey  9:16" FontWeight="SemiBold" FontSize="11.5" Foreground="#B8B0DC" VerticalAlignment="Center"/>
+                                <Button Content="Klasör" Click="BtnOpenVertFolder_Click" HorizontalAlignment="Right" Padding="8,2" FontSize="10.5"/>
                             </Grid>
-                            <TextBlock Grid.Row="1" Text="Sürükleyip sağa/timeline'a bırakın veya çift tıklayın:" FontSize="10" Foreground="#C5BEE8" Margin="0,0,0,4"/>
-                            <ListBox x:Name="LstVertFolderFiles" Grid.Row="2" Background="#140E38" BorderBrush="#3B2A94" Foreground="#FFFFFF" FontSize="11"
+                            <ListBox x:Name="LstVertFolderFiles" Grid.Row="1" Background="Transparent" BorderThickness="0" Foreground="#FFFFFF" FontSize="11"
                                      MouseDoubleClick="LstVertFolderFiles_MouseDoubleClick"
                                      SelectionChanged="LstVertFolderFiles_SelectionChanged"
                                      PreviewMouseLeftButtonDown="FolderList_PreviewMouseLeftButtonDown"
                                      PreviewMouseMove="FolderList_PreviewMouseMove"/>
                         </Grid>
                     </Border>
-
-                    <!-- Alt: Sürükle Bırak Bilgi Kutusu -->
-                    <Border Grid.Row="3" Background="#261A66" BorderBrush="#EF5F18" BorderThickness="1" CornerRadius="8" Padding="8">
-                        <TextBlock Text="Yatay ve Dikey klasörlerdeki dosyaları fareyle tutup doğrudan orta ekrana veya alt Timeline'a sürükleyebilirsiniz."
-                                   FontSize="10.5" Foreground="#FFFFFF" TextWrapping="Wrap"/>
-                    </Border>
                 </Grid>
             </Border>
 
-            <!-- 2A. ORTA PANEL (CIRCLE KAYIT MODU): YAN YANA 16:9 YATAY VE 9:16 DİKEY CANLI ÖNİZLEME -->
-            <Border x:Name="BdrLiveRecordPreview" Grid.Column="1" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,6,0">
+            <!-- 2A. ORTA SAHNE (STÜDYO MODU): YALIN 16:9 + 9:16 CANLI TUVAL VE YÜZEN KONTROL DOCK'U -->
+            <Border x:Name="BdrLiveRecordPreview" Grid.Column="1" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="14" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -250,92 +232,95 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Önizleme Üst Başlıkları -->
-                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <!-- Minimal Tuval Başlıkları -->
+                    <Grid Grid.Row="0" Margin="2,0,2,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.65*"/>
-                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="1.68*"/>
+                            <ColumnDefinition Width="14"/>
                             <ColumnDefinition Width="1*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="6" Padding="10,5">
-                            <Grid>
-                                <TextBlock Text="CIRCLE 16:9 YATAY STÜDYO" FontWeight="Bold" FontSize="11" Foreground="#FFFFFF"/>
-                                <TextBlock x:Name="TxtBadge16x9" Text="1080p / 4K • Zoom: 1.0x" FontSize="10.5" Foreground="#EF5F18" FontWeight="Bold" HorizontalAlignment="Right"/>
-                            </Grid>
-                        </Border>
+                        <Grid Grid.Column="0">
+                            <TextBlock Text="16:9 Yatay" FontWeight="SemiBold" FontSize="12" Foreground="#FFFFFF"/>
+                            <TextBlock x:Name="TxtBadge16x9" Text="1080p • 1.0x" FontSize="11.5" Foreground="#B8B0DC" HorizontalAlignment="Right"/>
+                        </Grid>
 
-                        <Border Grid.Column="2" Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="6" Padding="10,5">
-                            <Grid>
-                                <TextBlock Text="CIRCLE 9:16 SMART PORTRAIT" FontWeight="Bold" FontSize="11" Foreground="#FFFFFF"/>
-                                <TextBlock x:Name="TxtBadge9x16" Text="1080x1920 • İmleç Takibi" FontSize="10.5" Foreground="#EF5F18" FontWeight="Bold" HorizontalAlignment="Right"/>
-                            </Grid>
-                        </Border>
+                        <Grid Grid.Column="2">
+                            <TextBlock Text="9:16 Dikey" FontWeight="SemiBold" FontSize="12" Foreground="#FFFFFF"/>
+                            <TextBlock x:Name="TxtBadge9x16" Text="1080×1920" FontSize="11.5" Foreground="#B8B0DC" HorizontalAlignment="Right"/>
+                        </Grid>
                     </Grid>
 
-                    <!-- Yan Yana İki Canlı Tuval -->
+                    <!-- İki Canlı Tuval -->
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.65*"/>
-                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="1.68*"/>
+                            <ColumnDefinition Width="14"/>
                             <ColumnDefinition Width="1*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Background="#0D0826" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="8" ClipToBounds="True">
+                        <Border Grid.Column="0" Background="#0B0720" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" ClipToBounds="True">
                             <Image x:Name="ImgPreview16x9" Stretch="Uniform" RenderOptions.BitmapScalingMode="LowQuality"/>
                         </Border>
 
-                        <Border Grid.Column="2" Background="#0D0826" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="8" ClipToBounds="True">
+                        <Border Grid.Column="2" Background="#0B0720" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" ClipToBounds="True">
                             <Image x:Name="ImgPreview9x16" Stretch="Uniform" RenderOptions.BitmapScalingMode="LowQuality"/>
                         </Border>
                     </Grid>
 
-                    <!-- Alt Canlı Kayıt, Toplantı ve Kısayol Kontrol Barı -->
-                    <Border Grid.Row="2" Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,10,0,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                    <!-- Apple Yüzen Kayıt Dock'u (Kısayollar ToolTip İçinde, Görsel Gürültü Sıfır) -->
+                    <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,12,0,0">
+                        <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Padding="8,6" HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="BtnStartStopRec" Content="● Kayıt"
+                                        Click="BtnStartStopRec_Click" Background="#EF5F18" BorderBrush="#EF5F18"
+                                        Padding="22,7" FontSize="12.5" Margin="2,0"
+                                        ToolTip="İkili Kaydı Başlat / Bitir (Ctrl+Shift+R)"/>
 
-                            <WrapPanel Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Button x:Name="BtnStartStopRec" Content="● İkili Kaydı Başlat (Ctrl+Shift+R)"
-                                        Click="BtnStartStopRec_Click" Background="#EF5F18" BorderBrush="#FFFFFF"
-                                        Padding="16,8" FontSize="12.5" Margin="3,2"/>
+                                <Button x:Name="BtnPauseRec" Content="Duraklat"
+                                        Click="BtnPauseRec_Click" IsEnabled="False" Padding="14,7" Margin="2,0"
+                                        ToolTip="Kaydı Duraklat / Devam Et (Ctrl+Shift+P)"/>
 
-                                <Button x:Name="BtnPauseRec" Content="Duraklat (Ctrl+Shift+P)"
-                                        Click="BtnPauseRec_Click" IsEnabled="False" Padding="11,8" Margin="3,2"/>
+                                <Border Width="1" Background="#342580" Margin="8,4"/>
 
-                                <Button Content="Circle Meet Odasını Aç &amp; Kopyala"
-                                        Click="BtnQuickStartMeet_Click" Background="#261A66" BorderBrush="#EF5F18"
-                                        Padding="13,8" FontSize="12" Margin="3,2"/>
+                                <Button x:Name="BtnToggleWebcamQuick" Content="Kamera"
+                                        Click="BtnToggleWebcamQuick_Click" Padding="14,7" Margin="2,0"
+                                        ToolTip="Kamerayı Göster / Gizle (Alt+Shift+C)"/>
 
-                                <Button x:Name="BtnToggleSmartZoom" Content="Smart-Zoom: KAPALI (Alt+Q)"
-                                        Click="BtnToggleSmartZoom_Click" Padding="11,8" Margin="3,2"/>
+                                <Button x:Name="BtnToggleSmartZoom" Content="2x Zoom"
+                                        Click="BtnToggleSmartZoom_Click" Padding="14,7" Margin="2,0"
+                                        ToolTip="Fare Odaklı 2x Smart-Zoom (Alt+Q)"/>
 
-                                <Button x:Name="BtnToggleFollow" Content="İmleç Takibi: AÇIK (Alt+E)"
-                                        Click="BtnToggleFollow_Click" Padding="11,8" Margin="3,2"/>
+                                <Button x:Name="BtnToggleFollow" Content="Takip: Açık"
+                                        Click="BtnToggleFollow_Click" Padding="14,7" Margin="2,0"
+                                        ToolTip="İmleç Takibini Kilitle / Aç (Alt+E)"/>
 
-                                <Button x:Name="BtnToggleWebcamQuick" Content="Kamera: AÇIK (Alt+Shift+C)"
-                                        Click="BtnToggleWebcamQuick_Click" Padding="11,8" Margin="3,2"/>
+                                <Button Content="Fotoğraf" Click="BtnTakeScreenshot_Click"
+                                        Padding="14,7" Margin="2,0"
+                                        ToolTip="Net Ekran Fotoğrafı Al (Ctrl+Shift+K / Alt+S)"/>
 
-                                <Button Content="Ekran Resmi Al (Ctrl+Shift+K)" Click="BtnTakeScreenshot_Click"
-                                        Padding="11,8" Margin="3,2"/>
+                                <Button Content="İşaret" Click="BtnAddMarker_Click"
+                                        Padding="14,7" Margin="2,0"
+                                        ToolTip="Zaman Çizelgesine Bölüm İşareti Ekle (Ctrl+Shift+M)"/>
 
-                                <Button Content="Marker At (Ctrl+Shift+M)" Click="BtnAddMarker_Click"
-                                        Padding="11,8" Margin="3,2"/>
-                            </WrapPanel>
+                                <Border Width="1" Background="#342580" Margin="8,4"/>
 
-                            <TextBlock x:Name="TxtStatusBanner" Grid.Row="1"
-                                       Text="Circle Mix Record hazır. Tek tuşla 16:9 yatay ve 9:16 dikey kayıt alabilir veya Circle Meet odası başlatabilirsiniz."
-                                       HorizontalAlignment="Center" FontSize="11" Foreground="#C5BEE8" Margin="0,6,0,0"/>
-                        </Grid>
-                    </Border>
+                                <Button Content="Meet Odası"
+                                        Click="BtnQuickStartMeet_Click" Background="#261A66" BorderBrush="#342580"
+                                        Padding="15,7" Margin="2,0"
+                                        ToolTip="6 Haneli Kodla Canlı Toplantı &amp; Uzaktan Bağlantı Odasını Aç"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="TxtStatusBanner"
+                                   Text="Hazır"
+                                   HorizontalAlignment="Center" FontSize="11" Foreground="#B8B0DC" Margin="0,6,0,0"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- 2B. ORTA PANEL (CIRCLE EDIT MODU): KAYIT DEĞİL, TAMAMEN EDİTE ODAKLI CIRCLE KURGU & TIMELAPSE MONİTÖRÜ -->
-            <Border x:Name="BdrCapCutCenterMonitor" Grid.Column="1" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="10" Padding="12" Margin="0,0,6,0" Visibility="Collapsed"
+            <!-- 2B. ORTA SAHNE (KURGU MODU): APPLE FINAL CUT TARZI YALIN MONİTÖR VE HIZ BARI -->
+            <Border x:Name="BdrCapCutCenterMonitor" Grid.Column="1" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="14" Padding="14" Visibility="Collapsed"
                     AllowDrop="True" DragOver="CapCutDropZone_DragOver" Drop="CapCutDropZone_Drop">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -344,251 +329,230 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Circle Kurgu Monitörü Üst Bilgi & Yatay/Dikey Geçiş Barı -->
-                    <Border Grid.Row="0" Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,0,0,8">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="CIRCLE KURGU MONİTÖRÜ:  " FontWeight="ExtraBold" FontSize="11.5" Foreground="#EF5F18"/>
-                                <TextBlock x:Name="TxtCapCutActiveFile" Text="Boş Circle Kurgu Ekranı (Soldaki Yatay/Dikey Klasörden Video Sürükleyin)" FontWeight="SemiBold" FontSize="11.5" Foreground="#FFFFFF"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <Button x:Name="BtnCapCutView16x9" Content="16:9 Yatay Video" Click="BtnCapCutSwitch16x9_Click" Background="#EF5F18" BorderBrush="#FFFFFF" Padding="10,4" FontSize="11" Margin="0,0,6,0"/>
-                                <Button x:Name="BtnCapCutView9x16" Content="9:16 Dikey Video" Click="BtnCapCutSwitch9x16_Click" Background="#140E38" BorderBrush="#3B2A94" Padding="10,4" FontSize="11" Margin="0,0,6,0"/>
-                                <Button Content="Yeni Kayda Dön" Click="BtnModeRecord_Click" Background="#140E38" BorderBrush="#EF5F18" Padding="10,4" FontSize="11"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
+                    <!-- Kurgu Üst Barı -->
+                    <Grid Grid.Row="0" Margin="2,0,2,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="TxtCapCutActiveFile" Grid.Column="0" Text="Video seçin veya sürükleyin" FontWeight="SemiBold" FontSize="12" Foreground="#B8B0DC" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button x:Name="BtnCapCutView16x9" Content="16:9" Click="BtnCapCutSwitch16x9_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="12,4" FontSize="11.5" Margin="0,0,4,0"/>
+                            <Button x:Name="BtnCapCutView9x16" Content="9:16" Click="BtnCapCutSwitch9x16_Click" Background="#140E38" BorderBrush="#342580" Padding="12,4" FontSize="11.5"/>
+                        </StackPanel>
+                    </Grid>
 
-                    <!-- Circle Orta Video Sahnesi (Boş Kurgu Dropzone + Gerçek MediaElement Oynatıcı) -->
-                    <Border Grid.Row="1" Background="#0D0826" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="10" ClipToBounds="True"
+                    <!-- Video Oynatıcı Sahnesi -->
+                    <Border Grid.Row="1" Background="#0B0720" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" ClipToBounds="True"
                             AllowDrop="True" DragOver="CapCutDropZone_DragOver" Drop="CapCutDropZone_Drop">
                         <Grid>
-                            <!-- Boş Circle Kurgu Ekranı (Dosya Sürüklenmeden Önce Görünür) -->
-                            <Border x:Name="BdrCapCutEmptyState" Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="12" Margin="28" Padding="24" Visibility="Visible">
+                            <!-- Yalın Boş Durum -->
+                            <Border x:Name="BdrCapCutEmptyState" Background="Transparent" Padding="24" Visibility="Visible">
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <TextBlock Text="CIRCLE KURGU &amp; TIMELAPSE STÜDYOSU" FontSize="18" FontWeight="ExtraBold" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                    <TextBlock Text="Kayıt bittiğinde videolarınız otomatik olarak buraya yüklenir veya soldaki açık Yatay (16:9) ve Dikey (9:16) klasörlerden istediğiniz videoyu buraya sürükleyip bırakabilirsiniz."
-                                               TextWrapping="Wrap" MaxWidth="540" TextAlignment="Center" FontSize="12" Foreground="#C5BEE8" Margin="0,0,0,18"/>
-                                    <WrapPanel HorizontalAlignment="Center">
-                                        <Button Content="Yatay (16:9) Klasörünü Aç" Click="BtnOpenHorizFolder_Click" Background="#EF5F18" BorderBrush="#FFFFFF" Padding="14,8" Margin="4"/>
-                                        <Button Content="Dikey (9:16) Klasörünü Aç" Click="BtnOpenVertFolder_Click" Background="#261A66" BorderBrush="#EF5F18" Padding="14,8" Margin="4"/>
-                                        <Button Content="Bilgisayardan Video Seç" Click="BtnImportExternalToPool_Click" Background="#261A66" BorderBrush="#3B2A94" Padding="14,8" Margin="4"/>
-                                    </WrapPanel>
+                                    <TextBlock Text="Kurgu &amp; Timelapse" FontSize="20" FontWeight="SemiBold" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Sol kütüphaneden bir video seçin veya bu alana sürükleyin."
+                                               FontSize="12.5" Foreground="#B8B0DC" HorizontalAlignment="Center" Margin="0,0,0,18"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button Content="Video Seç" Click="BtnImportExternalToPool_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="18,8" Margin="4,0"/>
+                                        <Button Content="Yatay Klasör" Click="BtnOpenHorizFolder_Click" Padding="14,8" Margin="4,0"/>
+                                        <Button Content="Dikey Klasör" Click="BtnOpenVertFolder_Click" Padding="14,8" Margin="4,0"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
 
-                            <!-- Gerçek Circle Video & Ses Oynatıcı -->
                             <MediaElement x:Name="CapCutMediaPlayer" LoadedBehavior="Manual" UnloadedBehavior="Manual"
                                           Stretch="Uniform" ScrubbingEnabled="True" Visibility="Collapsed"
                                           MediaOpened="CapCutMediaPlayer_MediaOpened"
                                           MediaEnded="CapCutMediaPlayer_MediaEnded"
                                           MouseLeftButtonDown="CapCutMediaPlayer_MouseLeftButtonDown"/>
 
-                            <!-- Aktif Hız / Timelapse Rozeti -->
-                            <Border x:Name="BdrCapCutSpeedBadge" Background="#DD261A66" BorderBrush="#EF5F18" BorderThickness="1" CornerRadius="6"
+                            <Border x:Name="BdrCapCutSpeedBadge" Background="#DD261A66" BorderBrush="#EF5F18" BorderThickness="1" CornerRadius="8"
                                     Padding="10,4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Visibility="Collapsed">
-                                <TextBlock x:Name="TxtCapCutSpeedBadge" Text="Hız: 1.0x • Normal" FontWeight="Bold" FontSize="11" Foreground="#FFFFFF"/>
+                                <TextBlock x:Name="TxtCapCutSpeedBadge" Text="1.0x" FontWeight="SemiBold" FontSize="11.5" Foreground="#FFFFFF"/>
                             </Border>
                         </Grid>
                     </Border>
 
-                    <!-- Circle Alt Oynat / Duraklat / Kes / Sil & TIMELAPSE (Hızlandırma) Kontrol Barı -->
-                    <Border Grid.Row="2" Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,8,0,0">
-                        <StackPanel>
-                            <!-- Satır 1: Temel Oynatma & Kesme / Silme -->
-                            <WrapPanel HorizontalAlignment="Center" Margin="0,0,0,6">
-                                <Button Content="⏮ Başa Sar" Click="BtnPlayerStart_Click" Padding="10,6" Margin="3,2"/>
-                                <Button Content="⏪ -3 sn" Click="BtnPlayerBack_Click" Padding="10,6" Margin="3,2"/>
-                                <Button x:Name="BtnPlayerPlayPause" Content="▶ Oynat (Space)" Click="BtnPlayerPlayPause_Click"
-                                        Background="#EF5F18" BorderBrush="#FFFFFF" Padding="18,6" FontSize="12.5" FontWeight="Bold" Margin="4,2"/>
-                                <Button Content="⏩ +3 sn" Click="BtnPlayerForward_Click" Padding="10,6" Margin="3,2"/>
-                                <Button Content="Kes / Böl (S)" Click="BtnSplitClip_Click"
-                                        Background="#261A66" BorderBrush="#EF5F18" Padding="14,6" FontWeight="Bold" Margin="6,2,3,2"/>
-                                <Button Content="Seçili Klibi Sil (Del)" Click="BtnToggleDeleteClip_Click"
-                                        Background="#261A66" BorderBrush="#3B2A94" Padding="14,6" FontWeight="Bold" Margin="3,2"/>
-                                <Button Content="Çoğalt" Click="BtnDuplicateClip_Click" Padding="10,6" Margin="3,2"/>
-                                <Button Content="Geri Al (Ctrl+Z)" Click="BtnUndoEdit_Click" Padding="10,6" Margin="3,2"/>
-                                <Button x:Name="BtnTogglePlayerMute" Content="Ses: AÇIK" Click="BtnTogglePlayerMute_Click" Padding="10,6" Margin="3,2"/>
-                            </WrapPanel>
+                    <!-- Alt Transport ve Timelapse Dock'u -->
+                    <Border Grid.Row="2" Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Padding="10,7" Margin="0,10,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                            <!-- Satır 2: Eksiksiz TIMELAPSE (Hızlı Çekim) & Hız Eğrisi Kontrolü -->
-                            <Border Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="6" Padding="8,5">
-                                <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <TextBlock Text="CIRCLE TIMELAPSE &amp; HIZ:" FontWeight="ExtraBold" FontSize="11" Foreground="#EF5F18" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <Button Content="0.5x" Click="BtnSpeed05x_Click" Padding="8,4" FontSize="11" Margin="2"/>
-                                    <Button Content="1x Normal" Click="BtnSpeed1x_Click" Padding="8,4" FontSize="11" Margin="2"/>
-                                    <Button Content="2x Hızlı" Click="BtnSpeed2x_Click" Padding="8,4" FontSize="11" Margin="2"/>
-                                    <Button Content="4x Timelapse" Click="BtnSpeed4x_Click" Padding="8,4" FontSize="11" Margin="2"/>
-                                    <Button Content="8x Timelapse" Click="BtnSpeed8x_Click" Padding="8,4" FontSize="11" Margin="2"/>
-                                    <Button Content="16x Timelapse" Click="BtnSpeed16x_Click" Padding="8,4" FontSize="11" Margin="2"/>
-                                    <Button Content="30x Ultra Timelapse" Click="BtnSpeed30x_Click" Padding="8,4" FontSize="11" Margin="2"/>
-                                    <Button Content="60 FPS Timelapse MP4 Kaydet" Click="BtnRenderInstantTimelapse_Click"
-                                            Background="#EF5F18" BorderBrush="#FFFFFF" Padding="12,4" FontSize="11" FontWeight="Bold" Margin="8,2,2,2"/>
-                                </WrapPanel>
-                            </Border>
-                        </StackPanel>
+                            <!-- Sol: Kes, Sil, Geri Al -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Kes" Click="BtnSplitClip_Click" Padding="12,6" Margin="0,0,4,0" ToolTip="Seçili saniyeden böl (S / Ctrl+B)"/>
+                                <Button Content="Sil" Click="BtnToggleDeleteClip_Click" Padding="12,6" Margin="0,0,4,0" ToolTip="Seçili klibi sil (Delete)"/>
+                                <Button Content="Çoğalt" Click="BtnDuplicateClip_Click" Padding="11,6" Margin="0,0,4,0" ToolTip="Seçili klibi kopyala"/>
+                                <Button Content="Geri Al" Click="BtnUndoEdit_Click" Padding="11,6" Margin="0,0,4,0" ToolTip="Son işlemi geri al (Ctrl+Z)"/>
+                                <Button x:Name="BtnTogglePlayerMute" Content="Ses" Click="BtnTogglePlayerMute_Click" Padding="11,6" ToolTip="Oynatıcı sesini aç/kapat"/>
+                            </StackPanel>
+
+                            <!-- Orta: Oynatma -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Button Content="⏮" Click="BtnPlayerStart_Click" Padding="10,6" Margin="2,0" ToolTip="Başa sar"/>
+                                <Button Content="-3s" Click="BtnPlayerBack_Click" Padding="10,6" Margin="2,0" ToolTip="3 saniye geri"/>
+                                <Button x:Name="BtnPlayerPlayPause" Content="▶ Oynat" Click="BtnPlayerPlayPause_Click"
+                                        Background="#EF5F18" BorderBrush="#EF5F18" Padding="20,6" FontWeight="Bold" Margin="4,0" ToolTip="Oynat / Duraklat (Space)"/>
+                                <Button Content="+3s" Click="BtnPlayerForward_Click" Padding="10,6" Margin="2,0" ToolTip="3 saniye ileri"/>
+                            </StackPanel>
+
+                            <!-- Sağ: Hız & Timelapse -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="0.5x" Click="BtnSpeed05x_Click" Padding="8,5" FontSize="11" Margin="1,0"/>
+                                <Button Content="1x" Click="BtnSpeed1x_Click" Padding="8,5" FontSize="11" Margin="1,0"/>
+                                <Button Content="2x" Click="BtnSpeed2x_Click" Padding="8,5" FontSize="11" Margin="1,0"/>
+                                <Button Content="4x" Click="BtnSpeed4x_Click" Padding="8,5" FontSize="11" Margin="1,0"/>
+                                <Button Content="8x" Click="BtnSpeed8x_Click" Padding="8,5" FontSize="11" Margin="1,0"/>
+                                <Button Content="16x" Click="BtnSpeed16x_Click" Padding="8,5" FontSize="11" Margin="1,0"/>
+                                <Button Content="30x" Click="BtnSpeed30x_Click" Padding="8,5" FontSize="11" Margin="1,0,6,0"/>
+                                <Button Content="Timelapse Kaydet" Click="BtnRenderInstantTimelapse_Click"
+                                        Background="#EF5F18" BorderBrush="#EF5F18" Padding="13,6" FontSize="11.5"
+                                        ToolTip="Seçili hızda 60 FPS akıcı MP4 Timelapse videosu üret"/>
+                            </StackPanel>
+                        </Grid>
                     </Border>
                 </Grid>
             </Border>
 
-            <!-- 3. SAĞ PANEL: CIRCLE PORTRAIT, AUTO-CUT SESSİZLİK, PRO KURGU & CIRCLE MEET -->
-            <Border x:Name="BdrRightPanel" Grid.Column="2" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="10" Padding="8" Visibility="Collapsed">
+            <!-- 3. SAĞ DENETÇİ: KADRAJ, SESSİZLİK SİL, EFEKT & MEET -->
+            <Border x:Name="BdrRightPanel" Grid.Column="2" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Padding="10" Margin="10,0,0,0" Visibility="Collapsed">
                 <TabControl x:Name="RightTabControl" Background="Transparent" BorderThickness="0">
-                    <!-- SEKME 1: CIRCLE PORTRAIT & NON-DESTRUCTIVE UNCROP -->
-                    <TabItem Header="Circle Portrait">
+                    <!-- SEKME 1: KADRAJ -->
+                    <TabItem Header="Kadraj">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6">
                             <StackPanel>
-                                <TextBlock Text="CIRCLE NON-DESTRUCTIVE DİKEY KADRAJ" FontWeight="Bold" FontSize="11.5" Foreground="#EF5F18" Margin="0,4,0,6"/>
-                                <TextBlock Text="Master 16:9 kaynak ve kamera hareketleri (.cmrproj) korunur. Kayıttan sonra bile dikey videoyu kayıpsız uzaklaştırabilir (Uncrop) ve kadrajı değiştirebilirsiniz."
-                                           TextWrapping="Wrap" FontSize="11" Foreground="#C5BEE8" Margin="0,0,0,10"/>
-
-                                <TextBlock Text="Dikey Kadraj Modu (9:16):" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="Dikey Kadraj (9:16)" FontWeight="SemiBold" FontSize="12" Foreground="#B8B0DC" Margin="0,4,0,6"/>
                                 <ComboBox x:Name="CmbPortraitLayout" Height="28" SelectedIndex="0" SelectionChanged="CmbPortraitLayout_SelectionChanged" Margin="0,0,0,12">
-                                    <ComboBoxItem Content="1. Tam Dikey 9:16 (İmleç &amp; Odak Takipli)"/>
-                                    <ComboBoxItem Content="2. Sinematik Blur Uncrop (16:9 Tam Görünüm)"/>
-                                    <ComboBoxItem Content="3. Split Ekran (Üst Eğitim + Alt Kamera)"/>
+                                    <ComboBoxItem Content="Tam Dikey 9:16 (İmleç Takipli)"/>
+                                    <ComboBoxItem Content="Sinematik Blur Uncrop"/>
+                                    <ComboBoxItem Content="Split Ekran (Üst Ekran + Alt Kamera)"/>
                                 </ComboBox>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="Kayıpsız Uzaklaştırma (Uncrop Oranı):" FontSize="11" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtUncropVal" Text="%0 (Tam 9:16)" FontSize="11" FontWeight="Bold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="Uzaklaştırma (Uncrop)" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtUncropVal" Text="%0" FontSize="11.5" FontWeight="SemiBold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Slider x:Name="SldUncrop" Minimum="0" Maximum="100" Value="0" ValueChanged="SldUncrop_ValueChanged" Margin="0,0,0,12"/>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="Yatay Kadraj Kaydırma (Pan X):" FontSize="11" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtPanXVal" Text="0%" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="Yatay Kaydırma (Pan X)" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtPanXVal" Text="0%" FontSize="11.5" FontWeight="SemiBold" Foreground="#FFFFFF" HorizontalAlignment="Right"/>
                                 </Grid>
                                 <Slider x:Name="SldPanX" Minimum="-45" Maximum="45" Value="0" ValueChanged="SldPanX_ValueChanged" Margin="0,0,0,12"/>
 
-                                <CheckBox x:Name="ChkAutoClickZoom" Content="Tıklanan Yerlere Otomatik Smart-Zoom Yap" IsChecked="True"
-                                          Checked="SmartZoomOptions_Changed" Unchecked="SmartZoomOptions_Changed" Margin="0,0,0,8"/>
+                                <CheckBox x:Name="ChkAutoClickZoom" Content="Tıklanan Noktalara Otomatik Yakınlaş" IsChecked="True"
+                                          Checked="SmartZoomOptions_Changed" Unchecked="SmartZoomOptions_Changed" Margin="0,0,0,10"/>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="16:9 Smart-Zoom Oranı (Alt+Q):" FontSize="11" Foreground="#C5BEE8"/>
-                                    <TextBlock x:Name="TxtZoom16Val" Text="2.0x" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="16:9 Zoom Oranı" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtZoom16Val" Text="2.0x" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <Slider x:Name="SldZoom16" Minimum="1.2" Maximum="3.5" Value="2.0" ValueChanged="SmartZoomOptions_Changed" Margin="0,0,0,8"/>
+                                <Slider x:Name="SldZoom16" Minimum="1.2" Maximum="3.5" Value="2.0" ValueChanged="SmartZoomOptions_Changed" Margin="0,0,0,10"/>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="9:16 Dikey Zoom Oranı (Alt+Q):" FontSize="11" Foreground="#C5BEE8"/>
-                                    <TextBlock x:Name="TxtZoom9Val" Text="1.75x" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="9:16 Zoom Oranı" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtZoom9Val" Text="1.75x" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <Slider x:Name="SldZoom9" Minimum="1.2" Maximum="3.0" Value="1.75" ValueChanged="SmartZoomOptions_Changed" Margin="0,0,0,14"/>
+                                <Slider x:Name="SldZoom9" Minimum="1.1" Maximum="3.0" Value="1.75" ValueChanged="SmartZoomOptions_Changed" Margin="0,0,0,14"/>
 
-                                <Button Content="Master Kaynaktan Dikey Videoyu Yeniden Üret (Uncrop)"
-                                        Click="BtnReRenderUncrop_Click" Background="#EF5F18" BorderBrush="#FFFFFF"
-                                        Padding="10,9" Margin="0,0,0,6"/>
+                                <Button Content="9:16 Kadrajı Yeniden Üret"
+                                        Click="BtnReRenderUncrop_Click" Background="#EF5F18" BorderBrush="#EF5F18"
+                                        Padding="10,9"/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
 
-                    <!-- SEKME 2: CIRCLE AUTO-CUT SESSİZLİK KALDIRICI -->
-                    <TabItem Header="Sessizlik Sil">
+                    <!-- SEKME 2: SESSİZLİK -->
+                    <TabItem Header="Sessizlik">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6">
                             <StackPanel>
-                                <TextBlock Text="CIRCLE AUTO-CUT SESSİZLİK KALDIRICI" FontWeight="Bold" FontSize="11.5" Foreground="#EF5F18" Margin="0,4,0,6"/>
-                                <TextBlock Text="Mikrofon kanalını analiz eder. Sessiz kısımları ya kesip birleştirir (Ripple Delete) ya da 3D modelleme/çizim dersleri için silmeden 8x hızlandırır."
-                                           TextWrapping="Wrap" FontSize="11" Foreground="#C5BEE8" Margin="0,0,0,10"/>
+                                <TextBlock Text="Akıllı Sessizlik Kaldırıcı" FontWeight="SemiBold" FontSize="12" Foreground="#B8B0DC" Margin="0,4,0,10"/>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="Sessizlik Ses Eşiği (dB Threshold):" FontSize="11" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtSilenceDbVal" Text="-38 dB" FontSize="11" FontWeight="Bold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="Sessizlik Eşiği" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtSilenceDbVal" Text="-38 dB" FontSize="11.5" FontWeight="SemiBold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <Slider x:Name="SldSilenceDb" Minimum="-55" Maximum="-18" Value="-38" ValueChanged="SilenceParams_Changed" Margin="0,0,0,10"/>
+                                <Slider x:Name="SldSilenceDb" Minimum="-55" Maximum="-20" Value="-38" ValueChanged="SilenceParams_Changed" Margin="0,0,0,10"/>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="Minimum Sessizlik Süresi:" FontSize="11" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtSilenceDurVal" Text="0.55 sn" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="Minimum Süre" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtSilenceDurVal" Text="0.55 sn" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <Slider x:Name="SldSilenceDur" Minimum="0.20" Maximum="2.50" Value="0.55" ValueChanged="SilenceParams_Changed" Margin="0,0,0,10"/>
+                                <Slider x:Name="SldSilenceDur" Minimum="0.25" Maximum="2.0" Value="0.55" ValueChanged="SilenceParams_Changed" Margin="0,0,0,10"/>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="Kelime Koruma Payı (Padding):" FontSize="11" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtSilencePadVal" Text="150 ms" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="Nefes Payı" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtSilencePadVal" Text="150 ms" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <Slider x:Name="SldSilencePad" Minimum="20" Maximum="350" Value="150" ValueChanged="SilenceParams_Changed" Margin="0,0,0,10"/>
+                                <Slider x:Name="SldSilencePad" Minimum="50" Maximum="400" Value="150" ValueChanged="SilenceParams_Changed" Margin="0,0,0,10"/>
 
                                 <Grid Margin="0,0,0,3">
-                                    <TextBlock Text="3D Modelleme Sessizlik Hızlandırma:" FontSize="11" FontWeight="SemiBold"/>
-                                    <TextBlock x:Name="TxtDeadAirSpeedVal" Text="8.0x Hız" FontSize="11" FontWeight="Bold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="Sessiz Bölüm Hızı" FontSize="11.5" Foreground="#B8B0DC"/>
+                                    <TextBlock x:Name="TxtDeadAirSpeedVal" Text="8.0x" FontSize="11.5" FontWeight="SemiBold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
                                 </Grid>
-                                <Slider x:Name="SldDeadAirSpeed" Minimum="2" Maximum="16" Value="8" ValueChanged="SilenceParams_Changed" Margin="0,0,0,12"/>
+                                <Slider x:Name="SldDeadAirSpeed" Minimum="2.0" Maximum="16.0" Value="8.0" ValueChanged="SilenceParams_Changed" Margin="0,0,0,12"/>
 
-                                <Button Content="1. Mikrofon Kanalındaki Sessizlikleri Analiz Et"
-                                        Click="BtnAnalyzeSilence_Click" Background="#261A66" BorderBrush="#3B2A94"
-                                        Padding="10,8" Margin="0,0,0,8"/>
+                                <Button Content="Sessizliği Analiz Et" Click="BtnAnalyzeSilence_Click" Margin="0,0,0,6" Padding="10,7"/>
+                                <Button Content="Sessizliği Kes (Ripple Delete)" Click="BtnRippleDeleteSilence_Click"
+                                        Background="#EF5F18" BorderBrush="#EF5F18" Margin="0,0,0,6" Padding="10,8"/>
+                                <Button Content="Sessiz Bölgeleri Hızlandır" Click="BtnSpeedUpSilence_Click"
+                                        Margin="0,0,0,6" Padding="10,8"/>
+                                <Button Content="Kesimleri Sıfırla" Click="BtnResetSilenceCuts_Click" Padding="8,6" Margin="0,0,0,10"/>
 
-                                <Button Content="2A. Sessiz Kısımları Kes ve Birleştir (Ripple Delete)"
-                                        Click="BtnRippleDeleteSilence_Click" Background="#EF5F18" BorderBrush="#FFFFFF"
-                                        Padding="10,9" Margin="0,0,0,8"/>
-
-                                <Button Content="2B. 3D Modelleme Modu: Silmeden 8x Hızlandır"
-                                        Click="BtnSpeedUpSilence_Click" Background="#261A66" BorderBrush="#EF5F18"
-                                        Padding="10,9" Margin="0,0,0,8"/>
-
-                                <Button Content="Tüm Kesimleri Geri Al (Orijinale Dön)"
-                                        Click="BtnResetSilenceCuts_Click" Padding="10,7" Margin="0,0,0,8"/>
-
-                                <Border Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="6" Padding="9">
-                                    <TextBlock x:Name="TxtSilenceSummary"
-                                               Text="Henüz sessizlik analizi çalıştırılmadı."
-                                               TextWrapping="Wrap" FontSize="11" Foreground="#C5BEE8"/>
+                                <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" Padding="10">
+                                    <TextBlock x:Name="TxtSilenceSummary" Text="Analiz hazır."
+                                               FontSize="11" Foreground="#B8B0DC" TextWrapping="Wrap"/>
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
 
-                    <!-- SEKME 3: CIRCLE KURGU, DIŞARIDAN MEDYA, MASKELEME & ALTYAZI -->
-                    <TabItem Header="Kurgu &amp; Medya">
+                    <!-- SEKME 3: KATMAN & SES -->
+                    <TabItem Header="Katman &amp; Ses">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6">
                             <StackPanel>
-                                <TextBlock Text="CIRCLE PRO KURGU: MEDYA, MASKELEME &amp; BİRLEŞTİRME" FontWeight="Bold" FontSize="11.5" Foreground="#EF5F18" Margin="0,2,0,6"/>
-
-                                <!-- 1. Dışarıdan Video Ekle & Birleştir -->
-                                <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
+                                <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,0,0,8">
                                     <StackPanel>
-                                        <TextBlock Text="1. Dışarıdan Video Ekle &amp; Birleştir (Intro / Ek Sahne):" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Video Birleştirme" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,6"/>
                                         <Grid Margin="0,0,0,4">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Button Grid.Column="0" Content="Video Seç &amp; Birleştir (.mp4/.mov)" Click="BtnAddMergeVideo_Click" Background="#EF5F18" BorderBrush="#FFFFFF" Padding="8,5" Margin="0,0,6,0"/>
-                                            <Button Grid.Column="1" Content="Temizle" Click="BtnClearMergedVideos_Click" Background="#140E38" Padding="8,5"/>
+                                            <Button Grid.Column="0" Content="+ Video Ekle" Click="BtnAddMergeVideo_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="8,5" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="1" Content="Temizle" Click="BtnClearMergedVideos_Click" Padding="8,5"/>
                                         </Grid>
-                                        <TextBlock x:Name="TxtMergedVideosStatus" Text="Birleştirilecek ek video seçilmedi." FontSize="10.5" Foreground="#C5BEE8" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="TxtMergedVideosStatus" Text="Ek video seçilmedi." FontSize="10.5" Foreground="#B8B0DC" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- 2. Görüntü / Video Bindirme (PIP Overlay) & Maskeleme -->
-                                <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
+                                <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,0,0,8">
                                     <StackPanel>
-                                        <TextBlock Text="2. Görüntü / B-Roll Bindirme (PIP) &amp; Maskeleme:" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Görüntü Bindirme (PIP) &amp; Maske" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,6"/>
                                         <Grid Margin="0,0,0,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Button Grid.Column="0" Content="Resim / Video Bindir (.png/.jpg/.mp4)" Click="BtnSelectPipMedia_Click" Background="#140E38" BorderBrush="#EF5F18" Padding="8,5" Margin="0,0,6,0"/>
-                                            <Button Grid.Column="1" Content="Kaldır" Click="BtnClearPipMedia_Click" Background="#140E38" Padding="8,5"/>
+                                            <Button Grid.Column="0" Content="Görsel / Video Seç" Click="BtnSelectPipMedia_Click" Padding="8,5" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="1" Content="Kaldır" Click="BtnClearPipMedia_Click" Padding="8,5"/>
                                         </Grid>
 
                                         <Grid Margin="0,0,0,6">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="1.2*"/>
-                                                <ColumnDefinition Width="8"/>
-                                                <ColumnDefinition Width="1*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="6"/>
+                                                <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
                                             <ComboBox x:Name="CmbPipMaskShape" Grid.Column="0" Height="26" SelectedIndex="0" SelectionChanged="PipOptions_Changed">
-                                                <ComboBoxItem Content="Yuvarlatılmış Kart"/>
-                                                <ComboBoxItem Content="Daire Maske (Circle)"/>
-                                                <ComboBoxItem Content="Yeşil Perde Sil (Chroma)"/>
-                                                <ComboBoxItem Content="Yarı Saydam Filigran"/>
+                                                <ComboBoxItem Content="Yuvarlatılmış Kutu"/>
+                                                <ComboBoxItem Content="Daire Maske"/>
+                                                <ComboBoxItem Content="Yeşil Perde (Chroma)"/>
+                                                <ComboBoxItem Content="Tam Ekran Filigran"/>
                                             </ComboBox>
                                             <ComboBox x:Name="CmbPipPosition" Grid.Column="2" Height="26" SelectedIndex="0" SelectionChanged="PipOptions_Changed">
                                                 <ComboBoxItem Content="Sol Üst"/>
@@ -600,218 +564,198 @@
                                         </Grid>
 
                                         <Grid Margin="0,0,0,2">
-                                            <TextBlock Text="Bindirme Boyutu:" FontSize="10.5" Foreground="#C5BEE8"/>
-                                            <TextBlock x:Name="TxtPipScaleVal" Text="%28" FontSize="10.5" FontWeight="Bold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="Boyut" FontSize="11" Foreground="#B8B0DC"/>
+                                            <TextBlock x:Name="TxtPipScaleVal" Text="%28" FontSize="11" FontWeight="SemiBold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
                                         </Grid>
                                         <Slider x:Name="SldPipScale" Minimum="14" Maximum="65" Value="28" ValueChanged="PipScale_Changed"/>
-                                        <TextBlock x:Name="TxtPipMediaStatus" Text="Aktif bindirme yok." FontSize="10" Foreground="#C5BEE8" Margin="0,2,0,0"/>
+                                        <TextBlock x:Name="TxtPipMediaStatus" Text="Aktif bindirme yok." FontSize="10.5" Foreground="#B8B0DC" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- 3. Dışarıdan Ses / Arka Plan Müziği Ekle & Circle Renk Filtresi -->
-                                <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
+                                <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,0,0,8">
                                     <StackPanel>
-                                        <TextBlock Text="3. Dışarıdan Ses / Müzik Ekle &amp; Circle LUT Filtresi:" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
-                                        <Grid Margin="0,0,0,5">
+                                        <TextBlock Text="Arka Plan Müziği &amp; Renk" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                        <Grid Margin="0,0,0,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Button Grid.Column="0" Content="Müzik / Ses Ekle (.mp3/.wav)" Click="BtnSelectExternalAudio_Click" Background="#140E38" BorderBrush="#EF5F18" Padding="8,5" Margin="0,0,6,0"/>
-                                            <Button Grid.Column="1" Content="Sil" Click="BtnClearExternalAudio_Click" Background="#140E38" Padding="8,5"/>
+                                            <Button Grid.Column="0" Content="Ses Dosyası Seç" Click="BtnSelectExternalAudio_Click" Padding="8,5" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="1" Content="Kaldır" Click="BtnClearExternalAudio_Click" Padding="8,5"/>
                                         </Grid>
 
                                         <Grid Margin="0,0,0,2">
-                                            <TextBlock x:Name="TxtExternalAudioStatus" Text="Fon Müziği Ses Oranı (Konuşma Altı):" FontSize="10.5" Foreground="#C5BEE8"/>
-                                            <TextBlock x:Name="TxtBgmVolVal" Text="%18" FontSize="10.5" FontWeight="Bold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
+                                            <TextBlock x:Name="TxtExternalAudioStatus" Text="Müzik Seviyesi" FontSize="11" Foreground="#B8B0DC"/>
+                                            <TextBlock x:Name="TxtBgmVolVal" Text="%18" FontSize="11" FontWeight="SemiBold" Foreground="#EF5F18" HorizontalAlignment="Right"/>
                                         </Grid>
-                                        <Slider x:Name="SldBgmVolume" Minimum="5" Maximum="80" Value="18" ValueChanged="BgmVolume_Changed" Margin="0,0,0,6"/>
+                                        <Slider x:Name="SldBgmVolume" Minimum="5" Maximum="80" Value="18" ValueChanged="BgmVolume_Changed" Margin="0,0,0,8"/>
 
-                                        <TextBlock Text="Circle Renk &amp; Keskinlik Filtresi:" FontSize="10.5" Foreground="#C5BEE8" Margin="0,0,0,3"/>
                                         <ComboBox x:Name="CmbColorFilter" Height="26" SelectedIndex="0" SelectionChanged="ColorFilter_Changed">
-                                            <ComboBoxItem Content="1. Doğal Stüdyo (Orijinal)"/>
-                                            <ComboBoxItem Content="2. Circle Sinematik Kontrast"/>
-                                            <ComboBoxItem Content="3. Sıcak Altın Saat (Warm LUT)"/>
-                                            <ComboBoxItem Content="4. 3B CAD / Mimari Keskin Çizgi Modu"/>
+                                            <ComboBoxItem Content="Doğal Stüdyo"/>
+                                            <ComboBoxItem Content="Sinematik Kontrast"/>
+                                            <ComboBoxItem Content="Sıcak Altın Saat"/>
+                                            <ComboBoxItem Content="3B CAD Keskin Çizgi"/>
                                         </ComboBox>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- 4. Hedef Süre, -14 LUFS Ses & Otomatik Altyazı -->
-                                <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
+                                <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,0,0,8">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="65"/>
+                                                <ColumnDefinition Width="60"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Hedef Süre (sn):" VerticalAlignment="Center" FontSize="11" Foreground="#C5BEE8" Margin="0,0,6,0"/>
-                                            <TextBox x:Name="TxtTargetDurationSec" Grid.Column="1" Text="58" Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" Padding="5,3" Margin="0,0,6,0"/>
-                                            <Button Grid.Column="2" Content="Hedef Süreye Sığdır" Click="BtnFitTargetDuration_Click" Background="#140E38" Padding="6,4"/>
+                                            <TextBlock Grid.Column="0" Text="Hedef Süre (sn):" VerticalAlignment="Center" FontSize="11" Foreground="#B8B0DC" Margin="0,0,6,0"/>
+                                            <TextBox x:Name="TxtTargetDurationSec" Grid.Column="1" Text="58" Background="#261A66" Foreground="#FFFFFF" BorderBrush="#342580" Padding="5,3" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="2" Content="Sığdır" Click="BtnFitTargetDuration_Click" Padding="6,4"/>
                                         </Grid>
 
-                                        <CheckBox x:Name="ChkAudioNoiseSuppress" Content="Circle AI Ses Gürültü Silme" IsChecked="True"/>
-                                        <CheckBox x:Name="ChkAudioLufsNorm" Content="-14 LUFS Stüdyo Ses Dengeleme" IsChecked="True" Margin="0,3,0,6"/>
+                                        <CheckBox x:Name="ChkAudioNoiseSuppress" Content="AI Gürültü Engelleme" IsChecked="True"/>
+                                        <CheckBox x:Name="ChkAudioLufsNorm" Content="-14 LUFS Ses Dengeleme" IsChecked="True" Margin="0,2,0,6"/>
 
                                         <Grid Margin="0,0,0,5">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Button Grid.Column="0" Content="Altyazı Üret" Click="BtnGenerateSubtitles_Click" Background="#140E38" Margin="0,0,6,0" Padding="6,4"/>
-                                            <Button Grid.Column="1" Content=".SRT Kaydet" Click="BtnSaveSrt_Click" Background="#140E38" Padding="8,4"/>
+                                            <Button Grid.Column="0" Content="Altyazı Üret" Click="BtnGenerateSubtitles_Click" Margin="0,0,6,0" Padding="6,4"/>
+                                            <Button Grid.Column="1" Content=".SRT" Click="BtnSaveSrt_Click" Padding="10,4"/>
                                         </Grid>
-                                        <ListBox x:Name="LstSubtitles" Background="#140E38" BorderBrush="#3B2A94" Foreground="#FFFFFF" Height="72" FontSize="10.5"/>
+                                        <ListBox x:Name="LstSubtitles" Background="#261A66" BorderBrush="#342580" Foreground="#FFFFFF" Height="68" FontSize="10.5"/>
                                     </StackPanel>
                                 </Border>
 
-                                <Button Content="VİDEOLARI HAZIRLA VE PAYLAŞIM MERKEZİNE GEÇ"
-                                        Click="BtnExportAll_Click" Background="#EF5F18" BorderBrush="#FFFFFF"
-                                        Padding="10,10" FontWeight="Bold"/>
+                                <Button Content="Dışa Aktar ve Paylaş"
+                                        Click="BtnExportAll_Click" Background="#EF5F18" BorderBrush="#EF5F18"
+                                        Padding="10,9"/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
 
-                    <!-- SEKME 4: CIRCLE MEET & CANLI YAYIN -->
-                    <TabItem Header="Circle Meet">
+                    <!-- SEKME 4: MEET -->
+                    <TabItem Header="Meet">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6">
                             <StackPanel>
-                                <TextBlock Text="CIRCLE MEET — TEK KODLA TOPLANTI &amp; UZAKTAN BAĞLANTI" FontWeight="Bold" FontSize="11.5" Foreground="#EF5F18" Margin="0,4,0,6"/>
-
-                                <!-- 1. Kendi 6 Haneli Kodum & Uzaktan Kontrol İzni -->
-                                <Border Background="#261A66" BorderBrush="#EF5F18" BorderThickness="1.5" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,4,0,8">
                                     <StackPanel>
-                                        <Grid Margin="0,0,0,6">
+                                        <Grid Margin="0,0,0,8">
                                             <StackPanel>
-                                                <TextBlock Text="Circle 6 Haneli Bağlantı Kodunuz:" FontSize="11" Foreground="#C5BEE8"/>
-                                                <TextBlock x:Name="TxtMyRoomCode" Text="482-915" FontSize="22" FontWeight="ExtraBold" Foreground="#FFFFFF"/>
+                                                <TextBlock Text="Oda Kodunuz" FontSize="11" Foreground="#B8B0DC"/>
+                                                <TextBlock x:Name="TxtMyRoomCode" Text="482-915" FontSize="22" FontWeight="Bold" Foreground="#FFFFFF"/>
                                             </StackPanel>
-                                            <Button Content="Kodu Kopyala" Click="BtnCopyRoomCode_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="#EF5F18" BorderBrush="#FFFFFF" Padding="10,6"/>
+                                            <Button Content="Kopyala" Click="BtnCopyRoomCode_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="#EF5F18" BorderBrush="#EF5F18" Padding="12,6"/>
                                         </Grid>
 
                                         <CheckBox x:Name="ChkAllowRemoteControl"
-                                                  Content="Uzaktan Fare &amp; Klavye Kontrolüne İzin Ver (Circle Remote)"
+                                                  Content="Uzaktan Fare &amp; Klavye Kontrolü"
                                                   IsChecked="False" Checked="ChkAllowRemoteControl_Changed" Unchecked="ChkAllowRemoteControl_Changed"
-                                                  FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,2,0,8"/>
+                                                  Foreground="#FFFFFF" Margin="0,2,0,8"/>
 
-                                        <TextBlock Text="İnternet / Ağ Katılım Bağlantısı:" FontSize="10.5" Foreground="#C5BEE8"/>
                                         <TextBox x:Name="TxtMeetUrl" Text="http://localhost:5880/meet" IsReadOnly="True"
-                                                 Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" FontWeight="Bold" Padding="6,4" Margin="0,3,0,6"/>
+                                                 Background="#261A66" Foreground="#FFFFFF" BorderBrush="#342580" Padding="7,5" Margin="0,0,0,8"/>
                                         <WrapPanel>
-                                            <Button x:Name="BtnToggleMeet" Content="Canlı Odayı Aç" Click="BtnToggleMeet_Click" Background="#EF5F18" BorderBrush="#FFFFFF" Margin="0,0,6,4"/>
-                                            <Button Content="Tarayıcıda Aç" Click="BtnOpenMeetBrowser_Click" Background="#140E38" Margin="0,0,6,4"/>
-                                            <Button Content="Linki Kopyala" Click="BtnCopyMeetLink_Click" Background="#140E38" Margin="0,0,0,4"/>
+                                            <Button x:Name="BtnToggleMeet" Content="Odayı Kapat" Click="BtnToggleMeet_Click" Background="#EF5F18" BorderBrush="#EF5F18" Margin="0,0,6,4"/>
+                                            <Button Content="Tarayıcıda Aç" Click="BtnOpenMeetBrowser_Click" Margin="0,0,6,4"/>
+                                            <Button Content="Linki Kopyala" Click="BtnCopyMeetLink_Click" Margin="0,0,0,4"/>
                                         </WrapPanel>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- 2. Karşı Bilgisayara / Arkadaşının Odasına Kodla Bağlan -->
-                                <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,8">
                                     <StackPanel>
-                                        <TextBlock Text="Başka Bilgisayara / Circle Odasına Kodla Bağlan:" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,5"/>
+                                        <TextBlock Text="Kodla Bağlan" FontSize="11.5" FontWeight="SemiBold" Foreground="#B8B0DC" Margin="0,0,0,6"/>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBox x:Name="TxtRemoteJoinCode" Grid.Column="0" Text="" ToolTip="6 haneli kodu (Örn: 482-915) veya linki yazın"
-                                                     Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" FontWeight="Bold" FontSize="13.5" Padding="8,5" Margin="0,0,6,0"/>
-                                            <Button Grid.Column="1" Content="Kodla Bağlan" Click="BtnConnectByCode_Click" Background="#EF5F18" BorderBrush="#FFFFFF" Padding="12,5"/>
+                                            <TextBox x:Name="TxtRemoteJoinCode" Grid.Column="0" Text="" ToolTip="6 haneli oda kodunu yazın"
+                                                     Background="#261A66" Foreground="#FFFFFF" BorderBrush="#342580" FontWeight="SemiBold" FontSize="13" Padding="8,5" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="1" Content="Bağlan" Click="BtnConnectByCode_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="14,5"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Text="Circle Meet Sohbeti &amp; Söz İsteyen Katılımcılar:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <ListBox x:Name="LstMeetChat" Background="#140E38" BorderBrush="#3B2A94" Foreground="#FFFFFF" Height="95" FontSize="11" Margin="0,0,0,6"/>
+                                <TextBlock Text="Sohbet" FontSize="11.5" FontWeight="SemiBold" Foreground="#B8B0DC" Margin="0,0,0,4"/>
+                                <ListBox x:Name="LstMeetChat" Background="#140E38" BorderBrush="#342580" Foreground="#FFFFFF" Height="90" FontSize="11" Margin="0,0,0,6"/>
                                 <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="TxtInstructorChat" Grid.Column="0" Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" Padding="6,5" Margin="0,0,6,0"/>
+                                    <TextBox x:Name="TxtInstructorChat" Grid.Column="0" Background="#140E38" Foreground="#FFFFFF" BorderBrush="#342580" Padding="6,5" Margin="0,0,6,0"/>
                                     <Button Grid.Column="1" Content="Gönder" Click="BtnSendMeetChat_Click"/>
                                 </Grid>
 
-                                <Separator Background="#3B2A94" Margin="0,2,0,8"/>
-
-                                <TextBlock Text="CIRCLE RTMP CANLI YAYIN" FontWeight="Bold" FontSize="11" Foreground="#EF5F18" Margin="0,0,0,4"/>
-                                <TextBlock Text="RTMP Sunucu + Yayın Anahtarı (rtmp://...):" FontSize="10.5" Foreground="#C5BEE8" Margin="0,0,0,3"/>
-                                <TextBox x:Name="TxtRtmpUrl" Text="rtmp://a.rtmp.youtube.com/live2/" Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" Padding="6,5" Margin="0,0,0,8"/>
-                                <Button x:Name="BtnToggleRtmp" Content="RTMP Canlı Yayını Başlat" Click="BtnToggleRtmp_Click" Background="#261A66" BorderBrush="#EF5F18" Padding="10,7"/>
+                                <TextBlock Text="RTMP Canlı Yayın" FontWeight="SemiBold" FontSize="11.5" Foreground="#B8B0DC" Margin="0,0,0,4"/>
+                                <TextBox x:Name="TxtRtmpUrl" Text="rtmp://a.rtmp.youtube.com/live2/" Background="#140E38" Foreground="#FFFFFF" BorderBrush="#342580" Padding="6,5" Margin="0,0,0,6"/>
+                                <Button x:Name="BtnToggleRtmp" Content="Yayını Başlat" Click="BtnToggleRtmp_Click" Padding="10,7"/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
                 </TabControl>
             </Border>
 
-            <!-- ======================= KATMAN A: İLK GİRİŞ CIRCLE KARŞILAMA EKRANI (#261A66 • #EF5F18 • #FFFFFF) ======================= -->
+            <!-- ======================= KATMAN A: GENEL BAKIŞ & HIZLI BAĞLANTI (APPLE MINIMAL LAUNCHPAD) ======================= -->
             <Border x:Name="OverlayWelcome" Grid.Column="0" Grid.ColumnSpan="3"
-                    Background="#F2140E38" CornerRadius="10" Visibility="Visible" Padding="36">
-                <Border MaxWidth="980" MaxHeight="560" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="16" Padding="32" VerticalAlignment="Center">
-                    <StackPanel>
-                        <TextBlock Text="CIRCLE MIX RECORD" FontSize="24" FontWeight="ExtraBold" Foreground="#FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                        <TextBlock Text="Kayıt, Canlı Toplantı (Circle Meet), Kurgu &amp; Timelapse Stüdyosu  •  by thezencirs" FontSize="13.5" Foreground="#C5BEE8" HorizontalAlignment="Center" Margin="0,0,0,26"/>
+                    Background="#F5140E38" CornerRadius="14" Visibility="Collapsed" Padding="36">
+                <Border MaxWidth="820" MaxHeight="470" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="18" Padding="36" VerticalAlignment="Center">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Circle" FontSize="28" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Stüdyo, Toplantı ve Kurgu  •  by thezencirs" FontSize="13" Foreground="#B8B0DC" HorizontalAlignment="Center" Margin="0,4,0,28"/>
 
-                        <UniformGrid Columns="2" Rows="2" Height="320">
-                            <!-- Kart 1: Circle Dual Kayıt -->
-                            <Border Background="#261A66" BorderBrush="#EF5F18" BorderThickness="1.5" CornerRadius="12" Margin="8" Padding="20">
+                        <UniformGrid Columns="2" Rows="2" Height="250">
+                            <Border Background="#261A66" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Margin="6" Padding="18">
                                 <Grid>
                                     <StackPanel>
-                                        <TextBlock Text="1. Circle Dual Kayıt (16:9 + 9:16)" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,6"/>
-                                        <TextBlock Text="Tek tuşla aynı anda hem 16:9 Yatay hem de 9:16 Dikey imleç takipli ve ayna kameralı stüdyo kaydı alır, ayrı klasörlere kaydeder."
-                                                   TextWrapping="Wrap" FontSize="12" Foreground="#C5BEE8"/>
+                                        <TextBlock Text="Stüdyo Kaydı" FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Eşzamanlı 16:9 yatay ve 9:16 dikey kayıt." FontSize="12" Foreground="#B8B0DC" TextWrapping="Wrap"/>
                                     </StackPanel>
-                                    <Button Content="Circle Kayıt Ekranına Geç ➔" Click="BtnWelcomeStartRecord_Click"
-                                            Background="#EF5F18" BorderBrush="#FFFFFF" VerticalAlignment="Bottom" Padding="12,9"/>
+                                    <Button Content="Stüdyoyu Aç" Click="BtnWelcomeStartRecord_Click"
+                                            Background="#EF5F18" BorderBrush="#EF5F18" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="16,7"/>
                                 </Grid>
                             </Border>
 
-                            <!-- Kart 2: Circle Meet & Uzaktan Bağlantı -->
-                            <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="12" Margin="8" Padding="20">
+                            <Border Background="#261A66" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Margin="6" Padding="18">
                                 <Grid>
                                     <StackPanel>
-                                        <TextBlock Text="2. Circle Meet &amp; Uzaktan Bağlantı" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Başka hiçbir programa ihtiyaç duymadan 6 haneli Circle koduyla bağlanın, karşı ekranı yönetin veya kameralı toplantıyı kaydedin."
-                                                   TextWrapping="Wrap" FontSize="11.5" Foreground="#C5BEE8" Margin="0,0,0,8"/>
+                                        <TextBlock Text="Circle Meet" FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,0,0,6"/>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBox x:Name="TxtWelcomeJoinCode" Grid.Column="0" Text="" ToolTip="Arkadaşınızın 6 haneli Circle kodunu girin"
-                                                     Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" FontWeight="Bold" Padding="7,5" Margin="0,0,6,0"/>
-                                            <Button Grid.Column="1" Content="Kodla Bağlan" Click="BtnWelcomeConnectByCode_Click" Background="#EF5F18" BorderBrush="#FFFFFF" Padding="10,5"/>
+                                            <TextBox x:Name="TxtWelcomeJoinCode" Grid.Column="0" Text="" ToolTip="6 haneli oda kodu"
+                                                     Background="#140E38" Foreground="#FFFFFF" BorderBrush="#342580" FontWeight="SemiBold" Padding="7,4" Margin="0,0,6,0"/>
+                                            <Button Grid.Column="1" Content="Bağlan" Click="BtnWelcomeConnectByCode_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="12,4"/>
                                         </Grid>
                                     </StackPanel>
-                                    <Button x:Name="BtnWelcomeStartMeet" Content="Kendi Odamı Aç &amp; Kodumu Paylaş ➔" Click="BtnWelcomeStartMeet_Click"
-                                            Background="#140E38" BorderBrush="#EF5F18" VerticalAlignment="Bottom" Padding="12,9"/>
+                                    <Button x:Name="BtnWelcomeStartMeet" Content="Odamı Aç" Click="BtnWelcomeStartMeet_Click"
+                                            Background="#140E38" BorderBrush="#342580" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="16,7"/>
                                 </Grid>
                             </Border>
 
-                            <!-- Kart 3: Circle Edit & Timelapse -->
-                            <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="12" Margin="8" Padding="20">
+                            <Border Background="#261A66" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Margin="6" Padding="18">
                                 <Grid>
                                     <StackPanel>
-                                        <TextBlock Text="3. Circle Edit &amp; Timelapse Stüdyosu" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,6"/>
-                                        <TextBlock Text="Yatay ve Dikey klasörlerden sürükle-bırak ile kurgu yapın; oynatın, kesin, silin, sessiz boşlukları kaldırın veya 30x Timelapse üretin."
-                                                   TextWrapping="Wrap" FontSize="12" Foreground="#C5BEE8"/>
+                                        <TextBlock Text="Kurgu &amp; Timelapse" FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Kesme, sessizlik silme ve 30x Timelapse." FontSize="12" Foreground="#B8B0DC" TextWrapping="Wrap"/>
                                     </StackPanel>
-                                    <Button Content="Circle Edit Stüdyosunu Aç ➔" Click="BtnModeEdit_Click"
-                                            Background="#140E38" BorderBrush="#EF5F18" VerticalAlignment="Bottom" Padding="12,9"/>
+                                    <Button Content="Kurguyu Aç" Click="BtnModeEdit_Click"
+                                            Background="#140E38" BorderBrush="#342580" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="16,7"/>
                                 </Grid>
                             </Border>
 
-                            <!-- Kart 4: Circle Paylaşım Merkezi -->
-                            <Border Background="#261A66" BorderBrush="#3B2A94" BorderThickness="1.5" CornerRadius="12" Margin="8" Padding="20">
+                            <Border Background="#261A66" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Margin="6" Padding="18">
                                 <Grid>
                                     <StackPanel>
-                                        <TextBlock Text="4. Circle Paylaşım Merkezi" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,6"/>
-                                        <TextBlock Text="Kurgulanan yatay ve dikey videolarınız için otomatik başlık, bölüm zaman damgaları ve etiketler üretip tek tıkla yayınlayın."
-                                                   TextWrapping="Wrap" FontSize="12" Foreground="#C5BEE8"/>
+                                        <TextBlock Text="Paylaşım" FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Otomatik bölüm damgaları ve hızlı aktarım." FontSize="12" Foreground="#B8B0DC" TextWrapping="Wrap"/>
                                     </StackPanel>
-                                    <Button Content="Circle Paylaşım Merkezini Aç ➔" Click="BtnModeSocial_Click"
-                                            Background="#140E38" BorderBrush="#EF5F18" VerticalAlignment="Bottom" Padding="12,9"/>
+                                    <Button Content="Paylaşımı Aç" Click="BtnModeSocial_Click"
+                                            Background="#140E38" BorderBrush="#342580" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="16,7"/>
                                 </Grid>
                             </Border>
                         </UniformGrid>
@@ -819,78 +763,75 @@
                 </Border>
             </Border>
 
-            <!-- ======================= KATMAN B: CIRCLE PAYLAŞIM MERKEZİ ======================= -->
+            <!-- ======================= KATMAN B: MINIMAL PAYLAŞIM EKRANI ======================= -->
             <Border x:Name="OverlaySocial" Grid.Column="0" Grid.ColumnSpan="3"
-                    Background="#F2140E38" CornerRadius="10" Visibility="Collapsed" Padding="24">
-                <Border MaxWidth="1040" Background="#1C134C" BorderBrush="#EF5F18" BorderThickness="1.5" CornerRadius="14" Padding="26" VerticalAlignment="Center">
+                    Background="#F5140E38" CornerRadius="14" Visibility="Collapsed" Padding="28">
+                <Border MaxWidth="920" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="18" Padding="30" VerticalAlignment="Center">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.15*"/>
-                            <ColumnDefinition Width="24"/>
+                            <ColumnDefinition Width="1.2*"/>
+                            <ColumnDefinition Width="28"/>
                             <ColumnDefinition Width="1*"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Sol: Otomatik Başlık, Chapters & Etiket Editörü -->
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="CIRCLE PAYLAŞIM &amp; YAYIN MERKEZİ" FontSize="18" FontWeight="ExtraBold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
-                            <TextBlock Text="Videolarınız -14 LUFS ses dengelemesi ve kurgusuyla hazırlanır, açıklama ve etiketler otomatik panoya kopyalanır."
-                                       FontSize="12" Foreground="#C5BEE8" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                            <TextBlock Text="Paylaşım" FontSize="20" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                            <TextBlock Text="-14 LUFS ses dengelemesi ve bölüm zaman damgaları hazır."
+                                       FontSize="12" Foreground="#B8B0DC" Margin="0,0,0,16"/>
 
-                            <TextBlock Text="Video Başlığı:" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                            <TextBox x:Name="TxtSocialTitle" Text="3B Mimari Modelleme &amp; Tasarım Uygulamalı Ders — Circle Studio"
-                                     Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" Padding="8,6" FontSize="12.5" Margin="0,0,0,10"/>
+                            <TextBlock Text="Başlık" FontSize="11.5" Foreground="#B8B0DC" Margin="0,0,0,4"/>
+                            <TextBox x:Name="TxtSocialTitle" Text="3B Mimari Modelleme &amp; Tasarım — Circle Studio"
+                                     Background="#140E38" Foreground="#FFFFFF" BorderBrush="#342580" Padding="9,7" FontSize="12.5" Margin="0,0,0,12"/>
 
                             <Grid Margin="0,0,0,4">
-                                <TextBlock Text="SEO Açıklama + Otomatik Bölüm Zaman Damgaları + Etiketler:" FontSize="11.5" FontWeight="SemiBold"/>
-                                <Button Content="Otomatik Yenile" Click="BtnRegenerateSocialMeta_Click" HorizontalAlignment="Right" Padding="8,2" FontSize="10.5"/>
+                                <TextBlock Text="Açıklama &amp; Bölümler" FontSize="11.5" Foreground="#B8B0DC"/>
+                                <Button Content="Yenile" Click="BtnRegenerateSocialMeta_Click" HorizontalAlignment="Right" Padding="9,2" FontSize="10.5"/>
                             </Grid>
-                            <TextBox x:Name="TxtSocialCaption" Height="155" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                                     Background="#140E38" Foreground="#FFFFFF" BorderBrush="#3B2A94" Padding="8" FontSize="12" Margin="0,0,0,12"/>
+                            <TextBox x:Name="TxtSocialCaption" Height="150" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     Background="#140E38" Foreground="#FFFFFF" BorderBrush="#342580" Padding="9" FontSize="12" Margin="0,0,0,14"/>
 
                             <WrapPanel>
-                                <Button Content="1. Kurgulu Videoları Şimdi Hazırla (16:9 + 9:16)" Click="BtnExportAll_Click"
-                                        Background="#EF5F18" BorderBrush="#FFFFFF" Padding="14,9" Margin="0,0,8,0"/>
-                                <Button Content="Başlık &amp; Açıklamayı Kopyala" Click="BtnCopySocialText_Click" Padding="12,9"/>
+                                <Button Content="Videoları Dışa Aktar (16:9 + 9:16)" Click="BtnExportAll_Click"
+                                        Background="#EF5F18" BorderBrush="#EF5F18" Padding="16,9" Margin="0,0,8,0"/>
+                                <Button Content="Metni Kopyala" Click="BtnCopySocialText_Click" Padding="14,9"/>
                             </WrapPanel>
                         </StackPanel>
 
-                        <!-- Sağ: Tek Tıkla Gönderme Kartları -->
                         <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                            <TextBlock Text="TEK TIKLA PLATFORMLARA GÖNDER" FontSize="13.5" FontWeight="Bold" Foreground="#EF5F18" Margin="0,0,0,10"/>
+                            <TextBlock Text="Hızlı Gönder" FontSize="12.5" FontWeight="SemiBold" Foreground="#B8B0DC" Margin="0,0,0,10"/>
 
-                            <Button Content="▸ 16:9 Yatay Videoyu Gönder (Geniş Ekran)"
+                            <Button Content="16:9 Geniş Ekran Platformu"
                                     Click="BtnShareYouTube_Click" Background="#261A66" BorderBrush="#EF5F18"
-                                    Padding="14,12" FontSize="12.5" Margin="0,0,0,10" HorizontalContentAlignment="Left"/>
+                                    Padding="14,11" Margin="0,0,0,8" HorizontalContentAlignment="Left"/>
 
-                            <Button Content="▸ 9:16 Dikey Videoyu Gönder (Dikey Akış)"
-                                    Click="BtnShareInstagram_Click" Background="#261A66" BorderBrush="#3B2A94"
-                                    Padding="14,12" FontSize="12.5" Margin="0,0,0,10" HorizontalContentAlignment="Left"/>
+                            <Button Content="9:16 Dikey Video Akışı"
+                                    Click="BtnShareInstagram_Click" Background="#261A66" BorderBrush="#342580"
+                                    Padding="14,11" Margin="0,0,0,8" HorizontalContentAlignment="Left"/>
 
-                            <Button Content="▸ 9:16 Kısa Video Platformuna Gönder"
-                                    Click="BtnShareTikTok_Click" Background="#261A66" BorderBrush="#3B2A94"
-                                    Padding="14,12" FontSize="12.5" Margin="0,0,0,10" HorizontalContentAlignment="Left"/>
+                            <Button Content="9:16 Kısa Video Platformu"
+                                    Click="BtnShareTikTok_Click" Background="#261A66" BorderBrush="#342580"
+                                    Padding="14,11" Margin="0,0,0,8" HorizontalContentAlignment="Left"/>
 
-                            <Button Content="▸ Mesajlaşma / Masaüstü ile Paylaş"
-                                    Click="BtnShareWhatsApp_Click" Background="#261A66" BorderBrush="#3B2A94"
-                                    Padding="14,12" FontSize="12.5" Margin="0,0,0,14" HorizontalContentAlignment="Left"/>
+                            <Button Content="Masaüstü / Mesajlaşma"
+                                    Click="BtnShareWhatsApp_Click" Background="#261A66" BorderBrush="#342580"
+                                    Padding="14,11" Margin="0,0,0,14" HorizontalContentAlignment="Left"/>
 
-                            <Button Content="⬅ Circle Stüdyo Ekranına Geri Dön" Click="BtnModeRecord_Click" Background="#140E38" Padding="10,8"/>
+                            <Button Content="Stüdyoya Dön" Click="BtnModeRecord_Click" Background="#140E38" Padding="12,8"/>
                         </StackPanel>
                     </Grid>
                 </Border>
             </Border>
         </Grid>
 
-        <!-- ======================= ALT PANEL: CIRCLE ÇOK KATMANLI TIMELINE & SES DALGA FORMU ======================= -->
-        <Border x:Name="BdrTimelinePanel" Grid.Row="2" Background="#1C134C" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="10" Margin="8,4,8,8" Padding="10,8"
+        <!-- ======================= ALT TIMELINE (YALIN VE NET) ======================= -->
+        <Border x:Name="BdrTimelinePanel" Grid.Row="2" Background="#1C134C" BorderBrush="#342580" BorderThickness="1" CornerRadius="12" Margin="12,4,12,10" Padding="12,8"
                 AllowDrop="True" DragOver="CapCutDropZone_DragOver" Drop="CapCutDropZone_Drop">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="36"/>
+                    <RowDefinition Height="34"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Timeline Araç Çubuğu -->
                 <Grid Grid.Row="0" Margin="0,0,0,6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -899,33 +840,30 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="5" Padding="8,3" Margin="0,0,8,0">
-                            <TextBlock x:Name="TxtTimelineTimecode" Text="00:00.0 / 00:00.0" FontFamily="Consolas" FontWeight="Bold" FontSize="12" Foreground="#FFFFFF"/>
+                        <Border Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="6" Padding="9,3" Margin="0,0,8,0">
+                            <TextBlock x:Name="TxtTimelineTimecode" Text="00:00.0 / 00:00.0" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11.5" Foreground="#FFFFFF"/>
                         </Border>
-                        <Button x:Name="BtnTimelinePlayPause" Content="▶ Oynat / Duraklat" Click="BtnPlayerPlayPause_Click" Background="#EF5F18" BorderBrush="#FFFFFF" Padding="9,4" Margin="0,0,6,0"/>
-                        <Button Content="Kes / Böl (S)" Click="BtnSplitClip_Click" Padding="9,4" Margin="0,0,6,0"/>
-                        <Button Content="Sil (Del)" Click="BtnToggleDeleteClip_Click" Padding="9,4" Margin="0,0,6,0"/>
-                        <Button Content="Sessizliği Kes (Ripple)" Click="BtnRippleDeleteSilence_Click" Padding="9,4" Margin="0,0,6,0"/>
-                        <Button Content="8x Timelapse" Click="BtnSpeedUpSilence_Click" Padding="9,4" Margin="0,0,6,0"/>
-                        <Button Content="Geri Al (Ctrl+Z)" Click="BtnUndoEdit_Click" Padding="9,4"/>
+                        <Button x:Name="BtnTimelinePlayPause" Content="▶ Oynat" Click="BtnPlayerPlayPause_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="12,4" Margin="0,0,5,0"/>
+                        <Button Content="Kes" Click="BtnSplitClip_Click" Padding="10,4" Margin="0,0,5,0"/>
+                        <Button Content="Sil" Click="BtnToggleDeleteClip_Click" Padding="10,4" Margin="0,0,5,0"/>
+                        <Button Content="Sessizliği Kes" Click="BtnRippleDeleteSilence_Click" Padding="11,4" Margin="0,0,5,0"/>
+                        <Button Content="8x Hız" Click="BtnSpeedUpSilence_Click" Padding="10,4" Margin="0,0,5,0"/>
+                        <Button Content="Geri Al" Click="BtnUndoEdit_Click" Padding="10,4"/>
                     </StackPanel>
 
                     <TextBlock x:Name="TxtTimelineStats" Grid.Column="1"
-                               Text="CIRCLE TIMELINE  •  V1 (16:9)  •  V2 (9:16)  •  T1 (Altyazı)  •  A1 (Ses Dalga Formu)"
-                               VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11" Foreground="#C5BEE8"/>
+                               Text="Timeline"
+                               VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11" Foreground="#B8B0DC"/>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="#261A66" BorderBrush="#FFFFFF" BorderThickness="1" Width="10" Height="10" CornerRadius="2" Margin="4,0"/>
-                        <TextBlock Text="Normal " FontSize="11" Foreground="#C5BEE8" VerticalAlignment="Center"/>
-                        <Border Background="#EF5F18" Width="10" Height="10" CornerRadius="2" Margin="6,0,4,0"/>
-                        <TextBlock Text="Timelapse " FontSize="11" Foreground="#C5BEE8" VerticalAlignment="Center"/>
-                        <Border Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1" Width="10" Height="10" CornerRadius="2" Margin="6,0,4,0"/>
-                        <TextBlock Text="Silinen" FontSize="11" Foreground="#C5BEE8" VerticalAlignment="Center"/>
+                        <Border Background="#261A66" BorderBrush="#FFFFFF" BorderThickness="1" Width="9" Height="9" CornerRadius="2" Margin="4,0"/>
+                        <TextBlock Text="Klip " FontSize="11" Foreground="#B8B0DC" VerticalAlignment="Center"/>
+                        <Border Background="#EF5F18" Width="9" Height="9" CornerRadius="2" Margin="8,0,4,0"/>
+                        <TextBlock Text="Timelapse" FontSize="11" Foreground="#B8B0DC" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Grid>
 
-                <!-- Çok Katmanlı İnteraktif Timeline ve Ses Dalga Formu Tuvali -->
-                <Border Grid.Row="1" Background="#140E38" BorderBrush="#3B2A94" BorderThickness="1" CornerRadius="8" ClipToBounds="True"
+                <Border Grid.Row="1" Background="#140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="9" ClipToBounds="True"
                         AllowDrop="True" DragOver="CapCutDropZone_DragOver" Drop="CapCutDropZone_Drop">
                     <Canvas x:Name="TimelineCanvas" Background="Transparent"
                             MouseLeftButtonDown="TimelineCanvas_MouseLeftButtonDown"

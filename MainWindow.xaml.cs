@@ -84,7 +84,7 @@ namespace CircleMixRecord
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     TxtMeetUrl.Text = pubUrl;
-                    TxtStatusBanner.Text = $"🌐 İnternet tüneli aktif! 6 Haneli Kodunuz ({_meetServer.RoomCode}) ile farklı şehir/ağlardan doğrudan bağlanılabilir.";
+                    TxtStatusBanner.Text = $"Canlı Oda aktif • Oda Kodu: {_meetServer.RoomCode}";
                 }));
             };
 
@@ -146,11 +146,11 @@ namespace CircleMixRecord
             ImgPreview16x9.Source = _wb16x9;
             ImgPreview9x16.Source = _wb9x16;
 
-            // Başlangıç boş Circle Edit kurgu projesini hazırla ve İlk Giriş Sade Modunu aç
+            // Başlangıç boş Circle Edit kurgu projesini hazırla ve doğrudan Sade Stüdyo Tuvalini aç
             InitializeStarterTimelineProject();
             RefreshCapCutFolderLists();
             RegenerateSocialMediaMetadata();
-            SetStudioViewMode("Home");
+            SetStudioViewMode("Record");
 
             // Dual-Canvas motorunu anında başlat, kameraları arka planda algılayıp bağla
             _engine.OnRawFramesReady += Engine_OnRawFramesReady;
@@ -160,10 +160,10 @@ namespace CircleMixRecord
 
             // Circle Meet & Uzaktan Bağlantı Sunucusunu otomatik başlat ve 6 haneli kodu göster
             TxtMyRoomCode.Text = _meetServer.RoomCode;
-            BtnWelcomeStartMeet.Content = $"👥 Kendi Odamı Aç (Kodum: {_meetServer.RoomCode}) ➔";
+            BtnWelcomeStartMeet.Content = $"Odamı Aç ({_meetServer.RoomCode})";
             string meetUrl = await _meetServer.StartServerAsync();
             TxtMeetUrl.Text = meetUrl;
-            BtnToggleMeet.Content = "● Canlı Odayı Kapat";
+            BtnToggleMeet.Content = "Odayı Kapat";
             BtnToggleMeet.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
 
             await Task.Run(() =>
@@ -342,12 +342,12 @@ namespace CircleMixRecord
             BarMicLevel.Value = Math.Clamp(60.0 + micDb, 0, 60);
             BarSysLevel.Value = Math.Clamp(60.0 + sysDb, 0, 60);
 
-            // Canlı Sağlık & Performans Puanı (100/100)
+            // Canlı Sağlık & Performans Puanı (100%)
             if (TxtHealthBadge != null)
             {
                 TxtHealthBadge.Text = _activeStudioMode == "Edit"
-                    ? "Sağlık: 100/100 • Circle Edit"
-                    : $"Sağlık: {_engine.StudioHealthScore}/100 ({_engine.LastFrameRenderMs:0.0}ms)";
+                    ? "100%"
+                    : $"{_engine.StudioHealthScore}%";
             }
 
             // Circle Edit Video Oynatıcı Playhead Senkronizasyonu + Silinen Klipleri Otomatik Atlama + Canlı Timelapse Hızı
@@ -406,21 +406,23 @@ namespace CircleMixRecord
             if (_engine.IsRecording)
             {
                 var ts = _engine.RecordingElapsed;
-                string modeTag = _engine.IsVerticalOnlyRecording ? "KAYITTA (9:16 DİKEY)" : "KAYITTA (16:9 + 9:16)";
-                string stateLbl = _engine.IsPaused ? "DURAKLATILDI" : modeTag;
-                TxtRecTimer.Text = $"{stateLbl}  {ts.Hours:00}:{ts.Minutes:00}:{ts.Seconds:00}";
+                TxtRecTimer.Text = _engine.IsPaused
+                    ? $"DURAKLATILDI • {ts.Hours:00}:{ts.Minutes:00}:{ts.Seconds:00}"
+                    : $"{ts.Hours:00}:{ts.Minutes:00}:{ts.Seconds:00}";
                 DotRecStatus.Fill = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
             }
             else
             {
-                TxtRecTimer.Text = "HAZIR  00:00:00";
+                TxtRecTimer.Text = "00:00:00";
                 DotRecStatus.Fill = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255));
             }
 
-            string res16 = _engine.Record4KHorizontal ? "4K UHD (3840x2160)" : "Full HD (1920x1080)";
-            string zoomLbl = _engine.IsSmartZoomActive ? $"AKTİF ({_engine.ZoomFactor16x9:0.0}x)" : "1.0x";
-            TxtBadge16x9.Text = $"{res16} • Zoom: {zoomLbl}";
-            TxtBadge9x16.Text = $"1080x1920 • Uncrop: %{_engine.LiveUncropPercent:0}";
+            string res16 = _engine.Record4KHorizontal ? "4K • 60 FPS" : "1080p • 60 FPS";
+            string zoomLbl = _engine.IsSmartZoomActive ? $" • {_engine.ZoomFactor16x9:0.0}x" : "";
+            TxtBadge16x9.Text = $"{res16}{zoomLbl}";
+            TxtBadge9x16.Text = _engine.LiveUncropPercent > 1
+                ? $"1080x1920 • Uncrop %{_engine.LiveUncropPercent:0}"
+                : "1080x1920 • 60 FPS";
         }
 
         // ======================= 4 ADIMLI SADE GÖRÜNÜM & TAM CIRCLE EDIT KURGU EKRANI GEÇİŞİ =======================
@@ -447,8 +449,8 @@ namespace CircleMixRecord
             if (BdrCapCutCenterMonitor != null)
                 BdrCapCutCenterMonitor.Visibility = isEdit ? Visibility.Visible : Visibility.Collapsed;
 
-            // Üst buton vurguları (SCARLET BIKINI #261A66 & ORANGE #EF5F18)
-            var idleBg = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
+            // Apple Segmented Control vurguları (Transparent pasif & #EF5F18 aktif)
+            var idleBg = System.Windows.Media.Brushes.Transparent;
             var activeOrange = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
 
             BtnModeHome.Background = mode == "Home" ? activeOrange : idleBg;
@@ -476,7 +478,7 @@ namespace CircleMixRecord
                         RightTabControl.SelectedIndex = 1; // Sessizlik Sil / Kurgu sekmesi
                     RefreshCapCutFolderLists();
                     // Edit modunda Sol Panelde Açık Yatay & Dikey Klasörler (BdrCapCutMediaPool) her zaman açık!
-                    SetPanelsVisibility(showLeftRecord: false, showLeftCapCutPool: true, showRight: true, showTimeline: true);
+                    SetPanelsVisibility(showLeftRecord: false, showLeftCapCutPool: true, showRight: pro, showTimeline: true);
                     Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(RedrawTimeline));
                     break;
 
@@ -489,15 +491,15 @@ namespace CircleMixRecord
 
         private void SetPanelsVisibility(bool showLeftRecord, bool showLeftCapCutPool, bool showRight, bool showTimeline)
         {
-            ColLeftPanel.Width = (showLeftRecord || showLeftCapCutPool) ? new GridLength(300) : new GridLength(0);
+            ColLeftPanel.Width = (showLeftRecord || showLeftCapCutPool) ? new GridLength(255) : new GridLength(0);
             BdrLeftPanel.Visibility = showLeftRecord ? Visibility.Visible : Visibility.Collapsed;
             if (BdrCapCutMediaPool != null)
                 BdrCapCutMediaPool.Visibility = showLeftCapCutPool ? Visibility.Visible : Visibility.Collapsed;
 
-            ColRightPanel.Width = showRight ? new GridLength(365) : new GridLength(0);
+            ColRightPanel.Width = showRight ? new GridLength(320) : new GridLength(0);
             BdrRightPanel.Visibility = showRight ? Visibility.Visible : Visibility.Collapsed;
 
-            RowTimeline.Height = showTimeline ? new GridLength(245) : new GridLength(0);
+            RowTimeline.Height = showTimeline ? new GridLength(210) : new GridLength(0);
             BdrTimelinePanel.Visibility = showTimeline ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -653,16 +655,16 @@ namespace CircleMixRecord
 
                 var proj = _engine.StartDualRecording("CircleDers", verticalOnly: false);
                 _currentProject = proj;
-                BtnStartStopRec.Content = "⏹️ Kaydı Bitir & Circle Edit'e Geç (Ctrl+Shift+R)";
+                BtnStartStopRec.Content = "⏹ Bitir & Kurgu";
                 BtnStartStopRec.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
                 BtnPauseRec.IsEnabled = true;
-                TxtStatusBanner.Text = $"● Maksimum Kalite (NVENC CQP 16) Yatay (16:9) + Dikey (9:16) Kayıt Başladı!";
+                TxtStatusBanner.Text = "Kayıtta • 16:9 + 9:16 (60 FPS)";
             }
             else
             {
                 BtnStartStopRec.IsEnabled = false;
                 BtnPauseRec.IsEnabled = false;
-                TxtStatusBanner.Text = "Kayıt tamamlanıyor, Yatay (16:9) ve Dikey (9:16) klasörlerine yüksek kalitede kaydediliyor...";
+                TxtStatusBanner.Text = "Kayıt tamamlanıyor...";
 
                 var proj = await _engine.StopDualRecordingAsync();
                 _currentProject = proj;
@@ -697,11 +699,11 @@ namespace CircleMixRecord
                 }
                 RedrawTimeline();
 
-                BtnStartStopRec.Content = "● İkili Kaydı Başlat (Ctrl+Shift+R)";
+                BtnStartStopRec.Content = "● Kayıt";
                 BtnStartStopRec.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
                 BtnStartStopRec.IsEnabled = true;
 
-                TxtStatusBanner.Text = $"✅ Kayıt bitti ve Circle Edit Kurgu Ekranı açıldı! Yatay ve Dikey videolarınız soldaki açık klasörlere ayrıldı.";
+                TxtStatusBanner.Text = "Kayıt tamamlandı • Kurgu hazır";
             }
         }
 
@@ -714,9 +716,9 @@ namespace CircleMixRecord
 
                 var proj = _engine.StartDualRecording("DikeyReels", verticalOnly: true);
                 _currentProject = proj;
-                BtnStartStopRec.Content = "⏹️ Dikey Kaydı Bitir & Kurgula (Ctrl+Shift+V)";
+                BtnStartStopRec.Content = "⏹ Bitir & Kurgu";
                 BtnPauseRec.IsEnabled = true;
-                TxtStatusBanner.Text = $"📱 Yalnızca Dikey (9:16 Reels) Kayıt Başladı: {proj.Vertical9x16VideoPath}";
+                TxtStatusBanner.Text = $"Kayıtta • 9:16 Dikey ({System.IO.Path.GetFileName(proj.Vertical9x16VideoPath)})";
             }
             else
             {
@@ -727,13 +729,13 @@ namespace CircleMixRecord
         private async Task SplitRecordingPartAsync()
         {
             if (!_engine.IsRecording) return;
-            TxtStatusBanner.Text = "✂️ Kayıt durdurulmadan Yeni Part'a bölünüyor (Ctrl+Shift+N)...";
+            TxtStatusBanner.Text = "Yeni part başlatılıyor...";
             bool wasVertOnly = _engine.IsVerticalOnlyRecording;
             await _engine.StopDualRecordingAsync();
             var newProj = _engine.StartDualRecording("CircleDers_Part", verticalOnly: wasVertOnly);
             _currentProject = newProj;
             RefreshCapCutFolderLists();
-            TxtStatusBanner.Text = $"✅ Yeni Part kaydı kesintisiz başladı: {newProj.ProjectName}";
+            TxtStatusBanner.Text = $"Yeni part aktif • {newProj.ProjectName}";
         }
 
         private void BtnToggleWebcamQuick_Click(object sender, RoutedEventArgs e)
@@ -743,59 +745,54 @@ namespace CircleMixRecord
             ChkShowWebcam.IsChecked = nextState;
             if (BtnToggleWebcamQuick != null)
             {
-                BtnToggleWebcamQuick.Content = nextState ? "🎥 Kamera: AÇIK (Alt+Shift+C)" : "🚫 Kamera: GİZLİ (Alt+Shift+C)";
+                BtnToggleWebcamQuick.Content = nextState ? "Kamera" : "Kamera: Gizli";
                 BtnToggleWebcamQuick.Background = nextState
                     ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102))
                     : new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
             }
-            TxtStatusBanner.Text = nextState ? "🎥 Köşe Kamera Açıldı (Alt+Shift+C)" : "🚫 Köşe Kamera Gizlendi (Alt+Shift+C)";
+            TxtStatusBanner.Text = nextState ? "Kamera açık" : "Kamera gizlendi";
         }
 
         private void BtnShowShortcuts_Click(object sender, RoutedEventArgs e)
         {
             string info =
-                "⚡ CIRCLE MIX RECORD v1.0.0 — KISAYOL REHBERİ & HAKKINDA\n" +
-                "Geliştirici: thezencirs (https://github.com/thezencirs)\n" +
-                "Lisans: MIT License — Copyright (c) 2026 thezencirs\n" +
-                "══════════════════════════════════════════════════════════\n\n" +
-                "🎥 KAYIT KISAYOLLARI (Tüm Tam Ekran 3B / CAD Uygulamalarında Çalışır):\n" +
-                "• Ctrl + Shift + R  ➔ Çift Kayıt Başlat / Bitir (Yatay 16:9 + Dikey 9:16)\n" +
-                "• Ctrl + Shift + V  ➔ Yalnızca Dikey Reels (9:16) Kayıt Başlat / Bitir\n" +
-                "• Ctrl + Shift + P  ➔ Kaydı Duraklat / Devam Et (Mola)\n" +
-                "• Ctrl + Shift + N  ➔ Kaydı Durdurmadan Yeni Part'a Böl\n" +
-                "• Ctrl + Shift + M (veya Alt + M) ➔ Videoya Bölüm İşaretçisi (Marker) At\n" +
-                "• Ctrl + Shift + K (veya Alt + S) ➔ Net Kapak Fotoğrafı / Ekran Resmi Al\n\n" +
-                "🔍 ZOOM & KAMERA KISAYOLLARI:\n" +
-                "• Alt + Q           ➔ Fare İmleci Odaklı 2x Smart-Zoom Aç / Kapat\n" +
-                "• Alt + E           ➔ Zoom Takibini Sabitle / Serbest Bırak\n" +
-                "• Alt + Shift + C   ➔ Köşe Kamerayı Anında Göster / Gizle\n" +
-                "• Alt + Shift + M   ➔ Mikrofonu Sustur / Aç\n" +
-                "• Alt + Shift + D   ➔ Masaüstü Sesini Sustur / Aç\n" +
-                "• Alt + Shift + 1..4 ➔ Sahneler Arası Anlık Geçiş\n\n" +
-                "✂️ CIRCLE EDIT KURGU & TIMELAPSE KISAYOLLARI:\n" +
-                "• Space (Boşluk)    ➔ Videoyu Oynat / Duraklat\n" +
-                "• S (veya Ctrl + B) ➔ Seçili Saniyeden Videoyu Kes / Böl (Split)\n" +
-                "• Delete / Backspace ➔ Seçili Klibi Sil (Ripple Delete)\n" +
-                "• Ctrl + Z          ➔ Son Kesme / Silme İşlemini Geri Al (Undo)\n" +
-                "• Sol / Sağ Ok      ➔ 1 Saniye Geri / İleri Sar\n\n" +
-                "ℹ️ Bağımsız açık kaynak yazılım (thezencirs). Harici FFmpeg ikilisi mevcutsa kendi açık kaynak (LGPL/GPL) lisans koşulları altında komut satırından çağrılır.";
+                "CIRCLE MIX RECORD — KISAYOLLAR & HAKKINDA\n" +
+                "by thezencirs (https://github.com/thezencirs)\n" +
+                "MIT License — Copyright (c) 2026 thezencirs\n" +
+                "──────────────────────────────────────────────────────────\n\n" +
+                "STÜDYO & KAYIT:\n" +
+                "• Ctrl + Shift + R   İkili Kayıt Başlat / Bitir (16:9 + 9:16)\n" +
+                "• Ctrl + Shift + V   Sadece Dikey Kayıt (9:16)\n" +
+                "• Ctrl + Shift + P   Duraklat / Devam\n" +
+                "• Ctrl + Shift + N   Yeni Part'a Böl\n" +
+                "• Alt + Q            2x Akıllı Zoom\n" +
+                "• Alt + E            İmleç Takibini Kilitle / Aç\n" +
+                "• Alt + Shift + C    Kamerayı Göster / Gizle\n" +
+                "• Alt + Shift + M    Mikrofonu Sustur / Aç\n" +
+                "• Alt + S            Çift Ekran Fotoğrafı Al\n\n" +
+                "KURGU & TIMELAPSE:\n" +
+                "• Space              Oynat / Duraklat\n" +
+                "• S / Ctrl + B       Klibi Kes (Split)\n" +
+                "• Delete             Seçili Klibi Sil\n" +
+                "• Ctrl + Z           Geri Al (Undo)\n" +
+                "• Sol / Sağ Ok       1 Saniye Geri / İleri";
 
-            System.Windows.MessageBox.Show(info, "Circle Mix Record — Kısayollar & Hakkında (thezencirs)", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(info, "Circle — by thezencirs", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void BtnPauseRec_Click(object sender, RoutedEventArgs e)
         {
             if (!_engine.IsRecording) return;
             _engine.TogglePauseRecording();
-            BtnPauseRec.Content = _engine.IsPaused ? "▶️ Devam Et (Ctrl+Shift+P)" : "⏸️ Duraklat (Ctrl+Shift+P)";
+            BtnPauseRec.Content = _engine.IsPaused ? "▶ Devam" : "Duraklat";
         }
 
         private void BtnToggleSmartZoom_Click(object sender, RoutedEventArgs e)
         {
             _engine.IsSmartZoomActive = !_engine.IsSmartZoomActive;
             BtnToggleSmartZoom.Content = _engine.IsSmartZoomActive
-                ? "🔍 Fareye Smart-Zoom: AÇIK (Alt+Q)"
-                : "🔍 Fareye Smart-Zoom: KAPALI (Alt+Q)";
+                ? "2x Zoom: Açık"
+                : "2x Zoom";
             BtnToggleSmartZoom.Background = _engine.IsSmartZoomActive
                 ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24))
                 : new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
@@ -805,8 +802,8 @@ namespace CircleMixRecord
         {
             _engine.FollowMouseEnabled = !_engine.FollowMouseEnabled;
             BtnToggleFollow.Content = _engine.FollowMouseEnabled
-                ? "🎯 İmleç Takibi: AÇIK (Alt+E)"
-                : "🔒 İmleç Takibi: KİLİTLİ (Alt+E)";
+                ? "Takip: Açık"
+                : "Takip: Kilitli";
         }
 
         private void BtnAddMarker_Click(object sender, RoutedEventArgs e)
@@ -815,9 +812,9 @@ namespace CircleMixRecord
             _currentProject.Markers.Add(new TimelineMarker
             {
                 TimeSec = Math.Round(t, 2),
-                Title = $"Marker #{_currentProject.Markers.Count + 1}"
+                Title = $"İşaret {_currentProject.Markers.Count + 1}"
             });
-            TxtStatusBanner.Text = $"Timeline Marker eklendi: {t:0.00} sn";
+            TxtStatusBanner.Text = $"İşaret eklendi • {t:0.0} sn";
             RedrawTimeline();
         }
 
@@ -825,7 +822,7 @@ namespace CircleMixRecord
         {
             var (p16, p9) = _engine.CaptureDualScreenshot();
             RefreshCapCutFolderLists();
-            TxtStatusBanner.Text = $"📸 Ekran resmi panoya kopyalandı (Ctrl+V) ve Yatay/Dikey klasörlerine kaydedildi: {System.IO.Path.GetFileName(p16)}";
+            TxtStatusBanner.Text = $"Fotoğraf kaydedildi • {System.IO.Path.GetFileName(p16)}";
         }
 
         // ======================= SEKME 1: SMART PORTRAIT & NON-DESTRUCTIVE UNCROP =======================
@@ -1493,12 +1490,11 @@ namespace CircleMixRecord
                 {
                     var fi = new FileInfo(f);
                     double mb = fi.Length / (1024.0 * 1024.0);
-                    string icon = fi.Extension.Equals(".png", StringComparison.OrdinalIgnoreCase) ? "🖼️" : "🎬";
                     LstHorizFolderFiles.Items.Add(new FolderMediaItem
                     {
                         FilePath = f,
                         IsVertical = false,
-                        DisplayText = $"{icon} {fi.Name} ({mb:0.1} MB)"
+                        DisplayText = $"{fi.Name}  •  {mb:0.1} MB"
                     });
                 }
 
@@ -1512,12 +1508,11 @@ namespace CircleMixRecord
                 {
                     var fi = new FileInfo(f);
                     double mb = fi.Length / (1024.0 * 1024.0);
-                    string icon = fi.Extension.Equals(".png", StringComparison.OrdinalIgnoreCase) ? "🖼️" : "📱";
                     LstVertFolderFiles.Items.Add(new FolderMediaItem
                     {
                         FilePath = f,
                         IsVertical = true,
-                        DisplayText = $"{icon} {fi.Name} ({mb:0.1} MB)"
+                        DisplayText = $"{fi.Name}  •  {mb:0.1} MB"
                     });
                 }
             }
@@ -1527,7 +1522,7 @@ namespace CircleMixRecord
         private void BtnRefreshCapCutFolders_Click(object sender, RoutedEventArgs e)
         {
             RefreshCapCutFolderLists();
-            TxtStatusBanner.Text = "📂 Yatay (16:9) ve Dikey (9:16) kayıt klasörleri yenilendi.";
+            TxtStatusBanner.Text = "Medya listesi yenilendi";
         }
 
         private void BtnOpenHorizFolder_Click(object sender, RoutedEventArgs e)
@@ -1554,8 +1549,8 @@ namespace CircleMixRecord
             _undoStack.Clear();
 
             InitializeStarterTimelineProject();
-            TxtCapCutActiveFile.Text = "Boş Circle Edit Ekranı (Soldaki Yatay/Dikey Klasörden Video Sürükleyin veya Seçin)";
-            TxtStatusBanner.Text = "🧹 Boş Circle Edit Kurgu Ekranı açıldı! Soldaki Yatay veya Dikey klasörden bir videoyu sürükleyip bırakabilirsiniz.";
+            TxtCapCutActiveFile.Text = "Video seçin veya sürükleyin";
+            TxtStatusBanner.Text = "Tuval temizlendi";
             RedrawTimeline();
         }
 
@@ -1839,9 +1834,9 @@ namespace CircleMixRecord
 
         private void UpdatePlayPauseButtonLabels()
         {
-            string txt = _isPlayerPlaying ? "⏸ Duraklat (Space)" : "▶️ Oynat (Space)";
+            string txt = _isPlayerPlaying ? "⏸ Duraklat" : "▶ Oynat";
             if (BtnPlayerPlayPause != null) BtnPlayerPlayPause.Content = txt;
-            if (BtnTimelinePlayPause != null) BtnTimelinePlayPause.Content = _isPlayerPlaying ? "⏸ Duraklat" : "▶️ Oynat";
+            if (BtnTimelinePlayPause != null) BtnTimelinePlayPause.Content = txt;
         }
 
         private void BtnPlayerPlayPause_Click(object sender, RoutedEventArgs e)
@@ -1859,7 +1854,7 @@ namespace CircleMixRecord
                     LoadVideoIntoCapCutEditor(vItem.FilePath, isVertical: true, preserveCurrentProject: false);
                     return;
                 }
-                TxtStatusBanner.Text = "Önce soldaki Yatay/Dikey klasörden bir video seçin veya yeni kayıt alın.";
+                TxtStatusBanner.Text = "Soldaki medya listesinden bir video seçin veya yeni kayıt alın";
                 return;
             }
 
@@ -1907,7 +1902,7 @@ namespace CircleMixRecord
             CapCutMediaPlayer.IsMuted = _isPlayerMuted;
             if (BtnTogglePlayerMute != null)
             {
-                BtnTogglePlayerMute.Content = _isPlayerMuted ? "🔇 Ses: KAPALI" : "🔊 Ses: AÇIK";
+                BtnTogglePlayerMute.Content = _isPlayerMuted ? "Ses: Kapalı" : "Ses";
             }
         }
 
@@ -1965,12 +1960,11 @@ namespace CircleMixRecord
 
             if (TxtCapCutSpeedBadge != null)
             {
-                string tag = speed > 1.05 ? "TIMELAPSE HIZLI ÇEKİM" : (speed < 0.95 ? "YAVAŞ ÇEKİM" : "NORMAL");
-                TxtCapCutSpeedBadge.Text = $"⚡ Hız: {speed:0.#}x • {tag}";
+                TxtCapCutSpeedBadge.Text = $"{speed:0.#}x";
             }
 
             RedrawTimeline();
-            TxtStatusBanner.Text = $"⚡ Timelapse hızı {speed:0.#}x olarak uygulandı! (İsterseniz '🎬 Tek Tıkla 60 FPS Timelapse MP4 Kaydet' ile kalıcı kaydedin).";
+            TxtStatusBanner.Text = $"Hız: {speed:0.#}x";
         }
 
         private void BtnSpeed05x_Click(object sender, RoutedEventArgs e) => ApplyTimelapseSpeed(0.5);
@@ -2243,7 +2237,7 @@ namespace CircleMixRecord
             // 4 Katman Yüksekliği: Ruler (20px), V1 (34px), V2 (26px), T1 (24px), A1 Waveform (Kalan)
             double[] rowTops = { 0, 22, 60, 90, 118 };
             double[] rowHeights = { 20, 34, 26, 24, Math.Max(36, canvasH - 122) };
-            string[] rowLabels = { "ZAMAN", "V1 • 16:9", "V2 • 9:16", "T1 • ALTYAZI", "A1 • MİKROFON" };
+            string[] rowLabels = { "ZAMAN", "V1 • 16:9", "V2 • 9:16", "T1 • METİN", "A1 • SES" };
 
             for (int r = 0; r < rowLabels.Length; r++)
             {
@@ -2252,8 +2246,8 @@ namespace CircleMixRecord
                     Width = canvasW,
                     Height = rowHeights[r],
                     Fill = new SolidColorBrush(r % 2 == 0
-                        ? System.Windows.Media.Color.FromRgb(20, 14, 56)
-                        : System.Windows.Media.Color.FromRgb(28, 19, 76))
+                        ? System.Windows.Media.Color.FromRgb(18, 12, 49)
+                        : System.Windows.Media.Color.FromRgb(23, 16, 66))
                 };
                 Canvas.SetLeft(bgRect, 0);
                 Canvas.SetTop(bgRect, rowTops[r]);
@@ -2262,11 +2256,12 @@ namespace CircleMixRecord
                 var lbl = new TextBlock
                 {
                     Text = rowLabels[r],
-                    FontSize = 10.5,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(196, 181, 253))
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = System.Windows.Media.Brushes.White,
+                    Opacity = 0.72
                 };
-                Canvas.SetLeft(lbl, 8);
+                Canvas.SetLeft(lbl, 10);
                 Canvas.SetTop(lbl, rowTops[r] + (rowHeights[r] - 14) / 2);
                 TimelineCanvas.Children.Add(lbl);
             }
@@ -2281,7 +2276,8 @@ namespace CircleMixRecord
                 {
                     Text = $"{t:0.0}s",
                     FontSize = 9.5,
-                    Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(196, 181, 253))
+                    Foreground = System.Windows.Media.Brushes.White,
+                    Opacity = 0.65
                 };
                 Canvas.SetLeft(tickTxt, x - 10);
                 Canvas.SetTop(tickTxt, 3);
@@ -2296,7 +2292,7 @@ namespace CircleMixRecord
                     Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
                     CornerRadius = new CornerRadius(3),
                     Padding = new Thickness(4, 1, 4, 1),
-                    Child = new TextBlock { Text = "🚩 " + m.Title, FontSize = 9, FontWeight = FontWeights.Bold, Foreground = System.Windows.Media.Brushes.White }
+                    Child = new TextBlock { Text = m.Title, FontSize = 9, FontWeight = FontWeights.Bold, Foreground = System.Windows.Media.Brushes.White }
                 };
                 Canvas.SetLeft(mFlag, mx - 8);
                 Canvas.SetTop(mFlag, 1);
@@ -2324,17 +2320,17 @@ namespace CircleMixRecord
                     Background = new SolidColorBrush(fillCol),
                     BorderBrush = new SolidColorBrush(i == _selectedClipIndex
                         ? System.Windows.Media.Color.FromRgb(255, 255, 255)
-                        : System.Windows.Media.Color.FromRgb(59, 42, 148)),
-                    BorderThickness = new Thickness(i == _selectedClipIndex ? 2 : 1),
+                        : System.Windows.Media.Color.FromRgb(52, 37, 128)),
+                    BorderThickness = new Thickness(i == _selectedClipIndex ? 1.5 : 1),
                     CornerRadius = new CornerRadius(4),
                     ClipToBounds = true,
                     Child = new TextBlock
                     {
-                        Text = c.IsDeleted ? $"[SİLİNDİ] {c.Label}" : $"{c.Label} ({c.SpeedMultiplier:0.#}x)",
+                        Text = c.IsDeleted ? $"[Silindi] {c.Label}" : $"{c.Label} • {c.SpeedMultiplier:0.#}x",
                         FontSize = 10,
                         FontWeight = FontWeights.SemiBold,
                         Foreground = System.Windows.Media.Brushes.White,
-                        Margin = new Thickness(5, 6, 2, 0)
+                        Margin = new Thickness(6, 6, 2, 0)
                     }
                 };
                 Canvas.SetLeft(bdr, x1);
@@ -2348,14 +2344,15 @@ namespace CircleMixRecord
                 Width = trackAreaW,
                 Height = rowHeights[2] - 6,
                 Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102)),
-                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 42, 148)),
+                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(52, 37, 128)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
                 Child = new TextBlock
                 {
-                    Text = $"Circle Portrait 9:16 Odak Yörüngesi (.cmrproj • {_currentProject.CameraKeyframes.Count} Keyframe • Uncrop: %{_currentProject.UncropPercent:0})",
+                    Text = $"9:16 Odak • {_currentProject.CameraKeyframes.Count} Keyframe • Uncrop %{_currentProject.UncropPercent:0}",
                     FontSize = 10,
                     Foreground = System.Windows.Media.Brushes.White,
+                    Opacity = 0.85,
                     Margin = new Thickness(6, 3, 0, 0)
                 }
             };
