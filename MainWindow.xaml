@@ -370,6 +370,11 @@
                                     Padding="10,4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Visibility="Collapsed">
                                 <TextBlock x:Name="TxtCapCutSpeedBadge" Text="1.0x" FontWeight="SemiBold" FontSize="11.5" Foreground="#FFFFFF"/>
                             </Border>
+
+                            <Border x:Name="BdrLiveSubtitleOverlay" Background="#D8140E38" BorderBrush="#342580" BorderThickness="1" CornerRadius="8"
+                                    Padding="14,6" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="20,0,20,18" Visibility="Collapsed" IsHitTestVisible="False">
+                                <TextBlock x:Name="TxtLiveSubtitleOverlay" Text="" FontWeight="SemiBold" FontSize="13.5" Foreground="#FFFFFF" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="640"/>
+                            </Border>
                         </Grid>
                     </Border>
 
@@ -613,17 +618,22 @@
                                         </Grid>
 
                                         <CheckBox x:Name="ChkAudioNoiseSuppress" Content="AI Gürültü Engelleme" IsChecked="True"/>
-                                        <CheckBox x:Name="ChkAudioLufsNorm" Content="-14 LUFS Ses Dengeleme" IsChecked="True" Margin="0,2,0,6"/>
+                                        <CheckBox x:Name="ChkAudioLufsNorm" Content="-14 LUFS Ses Dengeleme" IsChecked="True" Margin="0,2,0,2"/>
+                                        <CheckBox x:Name="ChkBurnInSubtitles" Content="Altyazıyı Videoya Göm (Burn-In)" IsChecked="True" Margin="0,0,0,6"/>
 
                                         <Grid Margin="0,0,0,5">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Button Grid.Column="0" Content="Altyazı Üret" Click="BtnGenerateSubtitles_Click" Margin="0,0,6,0" Padding="6,4"/>
-                                            <Button Grid.Column="1" Content=".SRT" Click="BtnSaveSrt_Click" Padding="10,4"/>
+                                            <Button Grid.Column="0" Content="Altyazı Üret" Click="BtnGenerateSubtitles_Click" Margin="0,0,4,0" Padding="6,4"/>
+                                            <Button Grid.Column="1" Content=".SRT Aç" Click="BtnImportSrt_Click" Margin="0,0,4,0" Padding="8,4" ToolTip="Dışarıdan .SRT altyazı dosyası yükle"/>
+                                            <Button Grid.Column="2" Content=".SRT Kaydet" Click="BtnSaveSrt_Click" Padding="8,4"/>
                                         </Grid>
-                                        <ListBox x:Name="LstSubtitles" Background="#261A66" BorderBrush="#342580" Foreground="#FFFFFF" Height="68" FontSize="10.5"/>
+                                        <ListBox x:Name="LstSubtitles" Background="#261A66" BorderBrush="#342580" Foreground="#FFFFFF" Height="68" FontSize="10.5"
+                                                 MouseDoubleClick="LstSubtitles_MouseDoubleClick"
+                                                 ToolTip="Metni düzenlemek için satıra çift tıklayın"/>
                                     </StackPanel>
                                 </Border>
 
@@ -844,8 +854,11 @@
                             <TextBlock x:Name="TxtTimelineTimecode" Text="00:00.0 / 00:00.0" FontFamily="Consolas" FontWeight="SemiBold" FontSize="11.5" Foreground="#FFFFFF"/>
                         </Border>
                         <Button x:Name="BtnTimelinePlayPause" Content="▶ Oynat" Click="BtnPlayerPlayPause_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="12,4" Margin="0,0,5,0"/>
-                        <Button Content="Kes" Click="BtnSplitClip_Click" Padding="10,4" Margin="0,0,5,0"/>
-                        <Button Content="Sil" Click="BtnToggleDeleteClip_Click" Padding="10,4" Margin="0,0,5,0"/>
+                        <Button Content="Kes" Click="BtnSplitClip_Click" Padding="10,4" Margin="0,0,5,0" ToolTip="Seçili saniyeden böl (S / Ctrl+B)"/>
+                        <Button Content="Sil" Click="BtnToggleDeleteClip_Click" Padding="10,4" Margin="0,0,5,0" ToolTip="Seçili klibi sil (Del)"/>
+                        <Button Content="◀" Click="BtnMoveClipLeft_Click" Padding="8,4" Margin="0,0,3,0" ToolTip="Seçili klibi sola taşı"/>
+                        <Button Content="▶" Click="BtnMoveClipRight_Click" Padding="8,4" Margin="0,0,5,0" ToolTip="Seçili klibi sağa taşı"/>
+                        <Button Content="Kare Al" Click="BtnGrabEditorFrame_Click" Padding="10,4" Margin="0,0,5,0" ToolTip="Bu saniyedeki kareyi net PNG olarak çıkar"/>
                         <Button Content="Sessizliği Kes" Click="BtnRippleDeleteSilence_Click" Padding="11,4" Margin="0,0,5,0"/>
                         <Button Content="8x Hız" Click="BtnSpeedUpSilence_Click" Padding="10,4" Margin="0,0,5,0"/>
                         <Button Content="Geri Al" Click="BtnUndoEdit_Click" Padding="10,4"/>

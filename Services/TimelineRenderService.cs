@@ -15,29 +15,111 @@ namespace CircleMixRecord.Services
 {
     public static class TimelineRenderService
     {
+        public static bool ImportSrtFile(CmrProject project, string srtPath)
+        {
+            if (project == null || string.IsNullOrWhiteSpace(srtPath) || !File.Exists(srtPath))
+                return false;
+
+            try
+            {
+                string raw = File.ReadAllText(srtPath, Encoding.UTF8);
+                var blocks = raw.Replace("\r\n", "\n").Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+                var parsed = new List<SubtitleItem>();
+                int idx = 1;
+
+                foreach (var block in blocks)
+                {
+                    var lines = block.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+                    if (lines.Count < 2) continue;
+
+                    int timeLineIdx = lines[0].Contains("-->") ? 0 : 1;
+                    if (timeLineIdx >= lines.Count || !lines[timeLineIdx].Contains("-->")) continue;
+
+                    var parts = lines[timeLineIdx].Split(new[] { "-->" }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 2 &&
+                        TryParseSrtTimestamp(parts[0].Trim(), out double st) &&
+                        TryParseSrtTimestamp(parts[1].Trim(), out double en))
+                    {
+                        string text = string.Join(" ", lines.Skip(timeLineIdx + 1));
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            parsed.Add(new SubtitleItem
+                            {
+                                Index = idx++,
+                                StartSec = Math.Round(st, 2),
+                                EndSec = Math.Round(Math.Max(st + 0.3, en), 2),
+                                Text = text
+                            });
+                        }
+                    }
+                }
+
+                if (parsed.Count > 0)
+                {
+                    project.Subtitles = parsed;
+                    return true;
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
+        private static bool TryParseSrtTimestamp(string s, out double seconds)
+        {
+            seconds = 0;
+            s = s.Replace(',', '.');
+            if (TimeSpan.TryParse(s, CultureInfo.InvariantCulture, out var ts))
+            {
+                seconds = ts.TotalSeconds;
+                return true;
+            }
+            return false;
+        }
+
         public static void GenerateAutoSubtitlesFromSpeechSegments(CmrProject project)
         {
             if (project == null) return;
+
+            // 1. Proje veya video klasöründe hazır .srt varsa gerçek altyazıyı doğrudan yükle
+            string candidateSrt = Path.Combine(
+                string.IsNullOrWhiteSpace(project.ProjectDirectory) ? AppDomain.CurrentDomain.BaseDirectory : project.ProjectDirectory,
+                $"{project.ProjectName}_Altyazi.srt");
+            if (!File.Exists(candidateSrt) && !string.IsNullOrWhiteSpace(project.Horizontal16x9VideoPath))
+            {
+                candidateSrt = Path.ChangeExtension(project.Horizontal16x9VideoPath, ".srt");
+            }
+            if (File.Exists(candidateSrt) && ImportSrtFile(project, candidateSrt))
+                return;
+
             project.Subtitles.Clear();
+
+            // 2. Gerçek ses enerjisi / sessizlik analizi henüz yapılmadıysa otomatik çalıştır
+            if ((project.DetectedSilences == null || project.DetectedSilences.Count == 0) &&
+                (project.WaveformPeaks == null || project.WaveformPeaks.Count == 0))
+            {
+                AutoCutSilenceService.AnalyzeMicrophoneSilence(
+                    project,
+                    project.SilenceThresholdDb,
+                    project.SilenceMinDurationSec,
+                    project.SilencePaddingMs);
+            }
 
             var activeSpeechClips = project.Clips
                 .Where(c => !c.IsDeleted && !c.IsSilentSegment)
                 .OrderBy(c => c.SourceStartSec)
                 .ToList();
 
-            string[] samplePhrases = new[]
-            {
-                "Merhaba arkadaşlar, bu derste önemli adımları birlikte uygulayacağız.",
-                "Öncelikle sahnedeki ana referans noktamızı ve ölçülerimizi kontrol edelim.",
-                "Buradaki araç çubuğundan ilgili parametreyi seçip değerimizi giriyoruz.",
-                "Gördüğünüz gibi model üzerindeki değişiklik anında ekrana yansıdı.",
-                "Şimdi kısayol tuşumuzla yakınlaşıp köşe detaylarını netleştirelim.",
-                "Bu aşamada ışık ve malzeme dengesini doğal görünecek şekilde ayarlıyoruz.",
-                "Son kontrolümüzü yaptıktan sonra çıktımızı yüksek kalitede kaydedebiliriz."
-            };
-
             double outTimeCursor = 0.0;
             int idx = 1;
+
+            // Kayıt sırasında yakalanan gerçek aktif pencere başlıkları ve işaretçileri (Marker) kullan
+            var windowTitles = project.CameraKeyframes
+                .Where(k => !string.IsNullOrWhiteSpace(k.ActiveWindowTitle))
+                .Select(k => k.ActiveWindowTitle.Trim())
+                .Distinct()
+                .ToList();
+            string contextApp = windowTitles.FirstOrDefault() ?? project.ProjectName.Replace('_', ' ');
 
             if (activeSpeechClips.Count == 0)
             {
@@ -45,12 +127,17 @@ namespace CircleMixRecord.Services
                 double step = Math.Min(4.5, total / 3.0);
                 for (double t = 0; t < total - 0.5; t += step)
                 {
+                    var marker = project.Markers.FirstOrDefault(m => Math.Abs(m.TimeSec - t) < step);
+                    string lineText = marker != null
+                        ? $"{marker.Title} ({contextApp})"
+                        : $"{contextApp} — Bölüm {idx} ({FormatShortTimeLabel(t)})";
+
                     project.Subtitles.Add(new SubtitleItem
                     {
                         Index = idx,
                         StartSec = Math.Round(t, 2),
                         EndSec = Math.Round(Math.Min(total, t + step - 0.15), 2),
-                        Text = samplePhrases[(idx - 1) % samplePhrases.Length]
+                        Text = lineText
                     });
                     idx++;
                 }
@@ -60,24 +147,39 @@ namespace CircleMixRecord.Services
             foreach (var clip in activeSpeechClips)
             {
                 double clipOutDur = clip.OutputDurationSec;
-                // Uzun konuşma kliplerini 4 saniyelik okunaklı CapCut altyazı parçalarına böl
                 double subStep = 4.0;
                 double localPos = 0.0;
                 while (localPos < clipOutDur - 0.25)
                 {
                     double segLen = Math.Min(subStep, clipOutDur - localPos);
+                    double srcTime = clip.SourceStartSec + localPos * clip.SpeedMultiplier;
+                    var nearMarker = project.Markers.FirstOrDefault(m => Math.Abs(m.TimeSec - srcTime) <= 2.5);
+                    var nearKf = project.CameraKeyframes.FirstOrDefault(k => Math.Abs(k.TimeSec - srcTime) <= 2.0 && !string.IsNullOrWhiteSpace(k.ActiveWindowTitle));
+
+                    string labelText = nearMarker != null
+                        ? nearMarker.Title
+                        : (nearKf != null
+                            ? $"{nearKf.ActiveWindowTitle} • {clip.Label}"
+                            : $"{clip.Label} ({FormatShortTimeLabel(srcTime)})");
+
                     project.Subtitles.Add(new SubtitleItem
                     {
                         Index = idx,
                         StartSec = Math.Round(outTimeCursor + localPos, 2),
                         EndSec = Math.Round(outTimeCursor + localPos + segLen - 0.08, 2),
-                        Text = samplePhrases[(idx - 1) % samplePhrases.Length]
+                        Text = labelText
                     });
                     idx++;
                     localPos += segLen;
                 }
                 outTimeCursor += clipOutDur;
             }
+        }
+
+        private static string FormatShortTimeLabel(double sec)
+        {
+            var ts = TimeSpan.FromSeconds(Math.Max(0, sec));
+            return $"{(int)ts.TotalMinutes:00}:{ts.Seconds:00}";
         }
 
         public static string WriteSrtFile(CmrProject project)
@@ -413,6 +515,29 @@ namespace CircleMixRecord.Services
                 currentVideoPad = "[vpip]";
             }
 
+            // Altyazıları Videoya Göm (Burn-In Subtitles - FFmpeg drawtext zinciri)
+            if (project != null && project.BurnInSubtitles && project.Subtitles != null && project.Subtitles.Count > 0)
+            {
+                var subsToBurn = project.Subtitles.OrderBy(s => s.StartSec).Take(20).ToList();
+                int fontSize = targetH >= 1800 ? 42 : 30;
+                var dtChain = new List<string>();
+
+                foreach (var sub in subsToBurn)
+                {
+                    string safeText = EscapeDrawtext(sub.Text);
+                    if (string.IsNullOrWhiteSpace(safeText)) continue;
+                    string st = sub.StartSec.ToString("0.00", CultureInfo.InvariantCulture);
+                    string en = sub.EndSec.ToString("0.00", CultureInfo.InvariantCulture);
+                    dtChain.Add($"drawtext=fontfile='C\\:/Windows/Fonts/segoeui.ttf':text='{safeText}':fontcolor=white:fontsize={fontSize}:box=1:boxcolor=0x140E38@0.82:boxborderw=12:x=(w-text_w)/2:y=h-th-64:enable='between(t,{st},{en})'");
+                }
+
+                if (dtChain.Count > 0)
+                {
+                    fc.Append($"{currentVideoPad}{string.Join(",", dtChain)}[vsub];");
+                    currentVideoPad = "[vsub]";
+                }
+            }
+
             fc.Append($"{currentVideoPad}format=yuv420p[vfinal];");
 
             var audioFilters = new List<string>();
@@ -501,6 +626,28 @@ namespace CircleMixRecord.Services
                 if (mainVideoPath != finalOutputMp4)
                     File.Copy(mainVideoPath, finalOutputMp4, true);
             }
+        }
+
+        private static string EscapeDrawtext(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return "";
+            return text
+                .Replace("\\", "")
+                .Replace("'", "")
+                .Replace("\"", "")
+                .Replace(":", " - ")
+                .Replace("%", " pct")
+                .Replace("\r", " ")
+                .Replace("\n", " ")
+                .Trim();
+        }
+
+        public static bool ExtractSingleFramePng(string videoPath, double timeSec, string outputPngPath)
+        {
+            if (string.IsNullOrWhiteSpace(videoPath) || !File.Exists(videoPath)) return false;
+            string tStr = Math.Max(0, timeSec).ToString("0.000", CultureInfo.InvariantCulture);
+            string args = $"-y -hide_banner -loglevel error -ss {tStr} -i \"{videoPath}\" -frames:v 1 -q:v 1 \"{outputPngPath}\"";
+            return RunFfmpegBlocking(args, 15000) && File.Exists(outputPngPath);
         }
 
         private static string BuildAtempoChain(double speed)

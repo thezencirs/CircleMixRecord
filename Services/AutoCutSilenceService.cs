@@ -38,10 +38,23 @@ namespace CircleMixRecord.Services
                 if (wavDur > 0.5)
                     project.TotalDurationSec = wavDur;
             }
-            // 2. Harici bir video/ses dosyası yüklendiyse FFmpeg silencedetect ile analiz et
-            else if (!string.IsNullOrWhiteSpace(project.Horizontal16x9VideoPath) && File.Exists(project.Horizontal16x9VideoPath))
+            // 2. Harici bir video/ses dosyası yüklendiyse FFmpeg PCM ve silencedetect ile gerçek analiz yap
+            else
             {
-                silences = AnalyzeViaFfmpegSilenceDetect(project.Horizontal16x9VideoPath, thresholdDb, minSilenceDurationSec, padSec);
+                string mediaSrc = !string.IsNullOrWhiteSpace(project.Horizontal16x9VideoPath) && File.Exists(project.Horizontal16x9VideoPath)
+                    ? project.Horizontal16x9VideoPath
+                    : project.Vertical9x16VideoPath;
+
+                if (!string.IsNullOrWhiteSpace(mediaSrc) && File.Exists(mediaSrc))
+                {
+                    var realPeaks = ExtractRealWaveformPeaks(mediaSrc, out double realDur, 480);
+                    if (realPeaks.Count > 0)
+                        project.WaveformPeaks = realPeaks;
+                    if (realDur > 0.5)
+                        project.TotalDurationSec = realDur;
+
+                    silences = AnalyzeViaFfmpegSilenceDetect(mediaSrc, thresholdDb, minSilenceDurationSec, padSec);
+                }
             }
 
             project.DetectedSilences = silences;
@@ -331,6 +344,65 @@ namespace CircleMixRecord.Services
             catch { }
 
             return regions;
+        }
+
+        /// <summary>
+        /// Herhangi bir MP4 / MKV / MOV / WAV dosyasından FFmpeg aracılığıyla 16-bit PCM ses örneklerini
+        /// belleğe okuyarak %100 gerçek ses dalga formu (Waveform) tepelerini çıkarır.
+        /// </summary>
+        public static List<float> ExtractRealWaveformPeaks(string mediaPath, out double durationSec, int targetBars = 480)
+        {
+            durationSec = 0.0;
+            var peaks = new List<float>();
+            if (string.IsNullOrWhiteSpace(mediaPath) || !File.Exists(mediaPath))
+                return peaks;
+
+            try
+            {
+                const int sampleRate = 1000; // 1000 Hz mono PCM -> 1ms çözünürlük, ultra hızlı
+                var psi = new ProcessStartInfo
+                {
+                    FileName = HardwareEncoderService.GetFfmpegPath(),
+                    Arguments = $"-hide_banner -loglevel error -i \"{mediaPath}\" -vn -ac 1 -ar {sampleRate} -f s16le -",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true
+                };
+
+                using var proc = Process.Start(psi);
+                if (proc == null) return peaks;
+
+                using var ms = new MemoryStream();
+                proc.StandardOutput.BaseStream.CopyTo(ms);
+                proc.WaitForExit(12000);
+
+                byte[] raw = ms.ToArray();
+                int totalSamples = raw.Length / 2;
+                if (totalSamples <= 10) return peaks;
+
+                durationSec = (double)totalSamples / sampleRate;
+                int bars = Math.Clamp(targetBars, 64, 1200);
+                int samplesPerBar = Math.Max(1, totalSamples / bars);
+
+                for (int b = 0; b < bars; b++)
+                {
+                    int startSample = b * samplesPerBar;
+                    if (startSample >= totalSamples) break;
+                    int endSample = Math.Min(totalSamples, startSample + samplesPerBar);
+
+                    float maxPeak = 0f;
+                    for (int s = startSample; s < endSample; s++)
+                    {
+                        short val = BitConverter.ToInt16(raw, s * 2);
+                        float norm = Math.Abs(val / 32768f);
+                        if (norm > maxPeak) maxPeak = norm;
+                    }
+                    peaks.Add(Math.Clamp(maxPeak, 0.03f, 1.0f));
+                }
+            }
+            catch { }
+
+            return peaks;
         }
     }
 }

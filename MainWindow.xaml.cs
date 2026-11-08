@@ -34,6 +34,7 @@ namespace CircleMixRecord
         private double _playheadSec = 0.0;
         private int _selectedClipIndex = 0;
         private bool _isDraggingPlayhead = false;
+        private int _trimDragMode = 0; // 0: yok, 1: sol uç kırpma, 2: sağ uç kırpma
         private bool _uiReady = false;
         private string _activeStudioMode = "Home";
         private string _lastExported16x9Path = "";
@@ -396,6 +397,7 @@ namespace CircleMixRecord
 
                         double totalDur = Math.Max(1.0, _currentProject?.TotalDurationSec ?? 10.0);
                         TxtTimelineTimecode.Text = $"{FormatShortTime(_playheadSec)} / {FormatShortTime(totalDur)}";
+                        UpdateLiveSubtitleOverlay();
                         RedrawTimeline();
                     }
                 }
@@ -1095,8 +1097,118 @@ namespace CircleMixRecord
         {
             TimelineRenderService.GenerateAutoSubtitlesFromSpeechSegments(_currentProject);
             RefreshSubtitleListBox();
+            UpdateLiveSubtitleOverlay();
             RedrawTimeline();
-            TxtStatusBanner.Text = $"{_currentProject.Subtitles.Count} adet konuşma senkronlu altyazı bloğu üretildi.";
+            TxtStatusBanner.Text = $"{_currentProject.Subtitles.Count} adet konuşma senkronlu altyazı bloğu üretildi (Çift tıklayarak metni düzenleyebilirsiniz).";
+        }
+
+        private void BtnImportSrt_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "SRT Altyazı Dosyası Seçin",
+                Filter = "SRT Altyazı (*.srt)|*.srt|Tüm Dosyalar (*.*)|*.*"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                if (TimelineRenderService.ImportSrtFile(_currentProject, dlg.FileName))
+                {
+                    RefreshSubtitleListBox();
+                    UpdateLiveSubtitleOverlay();
+                    RedrawTimeline();
+                    TxtStatusBanner.Text = $"SRT altyazı yüklendi ({_currentProject.Subtitles.Count} satır): {System.IO.Path.GetFileName(dlg.FileName)}";
+                }
+                else
+                {
+                    TxtStatusBanner.Text = "SRT dosyası okunamadı.";
+                }
+            }
+        }
+
+        private void LstSubtitles_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            int idx = LstSubtitles.SelectedIndex;
+            if (_currentProject?.Subtitles == null || idx < 0 || idx >= _currentProject.Subtitles.Count)
+                return;
+
+            var sub = _currentProject.Subtitles[idx];
+            var win = new Window
+            {
+                Title = $"Altyazı Düzenle ({sub.StartSec:0.0}s - {sub.EndSec:0.0}s)",
+                Width = 480,
+                Height = 190,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(20, 14, 56)),
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var sp = new StackPanel { Margin = new Thickness(16) };
+            sp.Children.Add(new TextBlock
+            {
+                Text = $"Zaman Aralığı: {sub.StartSec:0.00}s — {sub.EndSec:0.00}s",
+                Foreground = System.Windows.Media.Brushes.White,
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var tb = new System.Windows.Controls.TextBox
+            {
+                Text = sub.Text,
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102)),
+                Foreground = System.Windows.Media.Brushes.White,
+                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 42, 148)),
+                Padding = new Thickness(8, 6, 8, 6),
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            sp.Children.Add(tb);
+
+            var btnSave = new System.Windows.Controls.Button
+            {
+                Content = "Kaydet",
+                Width = 110,
+                Padding = new Thickness(10, 6, 10, 6),
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                Foreground = System.Windows.Media.Brushes.White,
+                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                IsDefault = true
+            };
+            btnSave.Click += (_, _) => { win.DialogResult = true; win.Close(); };
+            sp.Children.Add(btnSave);
+            win.Content = sp;
+
+            if (win.ShowDialog() == true && !string.IsNullOrWhiteSpace(tb.Text))
+            {
+                sub.Text = tb.Text.Trim();
+                RefreshSubtitleListBox();
+                UpdateLiveSubtitleOverlay();
+                RedrawTimeline();
+                TxtStatusBanner.Text = "Altyazı metni güncellendi.";
+            }
+        }
+
+        private void UpdateLiveSubtitleOverlay()
+        {
+            if (BdrLiveSubtitleOverlay == null || TxtLiveSubtitleOverlay == null) return;
+            if (_currentProject?.Subtitles == null || _currentProject.Subtitles.Count == 0 || CapCutMediaPlayer.Visibility != Visibility.Visible)
+            {
+                BdrLiveSubtitleOverlay.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var activeSub = _currentProject.Subtitles.FirstOrDefault(s => _playheadSec >= s.StartSec && _playheadSec <= s.EndSec);
+            if (activeSub != null && !string.IsNullOrWhiteSpace(activeSub.Text))
+            {
+                TxtLiveSubtitleOverlay.Text = activeSub.Text;
+                BdrLiveSubtitleOverlay.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                BdrLiveSubtitleOverlay.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void BtnSaveSrt_Click(object sender, RoutedEventArgs e)
@@ -1131,6 +1243,7 @@ namespace CircleMixRecord
 
             _currentProject.EnableNoiseSuppression = ChkAudioNoiseSuppress.IsChecked == true;
             _currentProject.EnableLufsNormalization = ChkAudioLufsNorm.IsChecked == true;
+            _currentProject.BurnInSubtitles = ChkBurnInSubtitles?.IsChecked ?? true;
 
             var (out16, out9, outSrt) = await TimelineRenderService.ExportEditedSocialMediaPackageAsync(
                 _currentProject,
@@ -1777,21 +1890,32 @@ namespace CircleMixRecord
                         IsSilentSegment = false
                     });
 
-                    // Gerçekçi ses dalga formu oluştur (eğer harici MP4 yüklendiyse)
+                    // Harici MP4 veya video yüklendiyse FFmpeg PCM üzerinden %100 gerçek ses dalga formunu çıkar
                     if (_currentProject.WaveformPeaks == null || _currentProject.WaveformPeaks.Count == 0)
                     {
-                        _currentProject.WaveformPeaks = new List<float>();
-                        var rng = new Random(base.GetHashCode());
-                        for (int i = 0; i < 480; i++)
+                        string activePath = _activeCapCutVideoPath;
+                        _ = Task.Run(() =>
                         {
-                            _currentProject.WaveformPeaks.Add((float)(0.18 + rng.NextDouble() * 0.65));
-                        }
+                            var realPeaks = AutoCutSilenceService.ExtractRealWaveformPeaks(activePath, out _, 480);
+                            if (realPeaks.Count > 0)
+                            {
+                                Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    if (_currentProject != null)
+                                    {
+                                        _currentProject.WaveformPeaks = realPeaks;
+                                        RedrawTimeline();
+                                    }
+                                }));
+                            }
+                        });
                     }
                 }
 
                 _playheadSec = 0.0;
                 _selectedClipIndex = 0;
                 TxtTimelineTimecode.Text = $"{FormatShortTime(0)} / {FormatShortTime(realDur)}";
+                UpdateLiveSubtitleOverlay();
                 RedrawTimeline();
             }
         }
@@ -2158,21 +2282,136 @@ namespace CircleMixRecord
             RedrawTimeline();
         }
 
+        private void BtnMoveClipLeft_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject?.Clips == null || _selectedClipIndex <= 0 || _selectedClipIndex >= _currentProject.Clips.Count) return;
+            PushUndoSnapshot();
+            var c = _currentProject.Clips[_selectedClipIndex];
+            _currentProject.Clips.RemoveAt(_selectedClipIndex);
+            _selectedClipIndex--;
+            _currentProject.Clips.Insert(_selectedClipIndex, c);
+            RedrawTimeline();
+            TxtStatusBanner.Text = $"◀ '{c.Label}' sıralamada sola taşındı.";
+        }
+
+        private void BtnMoveClipRight_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject?.Clips == null || _selectedClipIndex < 0 || _selectedClipIndex >= _currentProject.Clips.Count - 1) return;
+            PushUndoSnapshot();
+            var c = _currentProject.Clips[_selectedClipIndex];
+            _currentProject.Clips.RemoveAt(_selectedClipIndex);
+            _selectedClipIndex++;
+            _currentProject.Clips.Insert(_selectedClipIndex, c);
+            RedrawTimeline();
+            TxtStatusBanner.Text = $"▶ '{c.Label}' sıralamada sağa taşındı.";
+        }
+
+        private void BtnGrabEditorFrame_Click(object sender, RoutedEventArgs e)
+        {
+            string srcVideo = !string.IsNullOrWhiteSpace(_activeCapCutVideoPath) && File.Exists(_activeCapCutVideoPath)
+                ? _activeCapCutVideoPath
+                : (_isCapCutShowingVertical ? _currentProject?.Vertical9x16VideoPath : _currentProject?.Horizontal16x9VideoPath);
+
+            if (string.IsNullOrWhiteSpace(srcVideo) || !File.Exists(srcVideo))
+            {
+                TxtStatusBanner.Text = "Kare yakalamak için önce bir video seçin.";
+                return;
+            }
+
+            string targetDir = _isCapCutShowingVertical
+                ? HardwareEncoderService.GetVerticalRecordingsDir()
+                : HardwareEncoderService.GetHorizontalRecordingsDir();
+            string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string outPng = System.IO.Path.Combine(targetDir, $"Kare_{(_isCapCutShowingVertical ? "9x16" : "16x9")}_{stamp}.png");
+
+            if (TimelineRenderService.ExtractSingleFramePng(srcVideo, _playheadSec, outPng))
+            {
+                try
+                {
+                    var bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.UriSource = new Uri(outPng, UriKind.Absolute);
+                    bmp.EndInit();
+                    System.Windows.Clipboard.SetImage(bmp);
+                }
+                catch { }
+                RefreshCapCutFolderLists();
+                TxtStatusBanner.Text = $"📸 {_playheadSec:0.00}. saniyedeki kare PNG olarak kaydedildi ve panoya kopyalandı: {System.IO.Path.GetFileName(outPng)}";
+            }
+        }
+
         private void TimelineCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RedrawTimeline();
 
         private void TimelineCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            System.Windows.Point pt = e.GetPosition(TimelineCanvas);
+            _trimDragMode = 0;
+
+            // V1 katmanı (Y: 22..56) üzerinde seçili klibin sol veya sağ Trim tutamacına mı tıklandı kontrol et
+            if (pt.Y >= 20 && pt.Y <= 58 && _currentProject?.Clips != null &&
+                _selectedClipIndex >= 0 && _selectedClipIndex < _currentProject.Clips.Count)
+            {
+                double trackAreaW = Math.Max(100, TimelineCanvas.ActualWidth - 115);
+                double totalDur = Math.Max(1.0, _currentProject.TotalDurationSec);
+                var sel = _currentProject.Clips[_selectedClipIndex];
+                double x1 = 105 + (sel.SourceStartSec / totalDur) * trackAreaW;
+                double x2 = 105 + (sel.SourceEndSec / totalDur) * trackAreaW;
+
+                if (Math.Abs(pt.X - x1) <= 8)
+                {
+                    PushUndoSnapshot();
+                    _trimDragMode = 1;
+                }
+                else if (Math.Abs(pt.X - x2) <= 8)
+                {
+                    PushUndoSnapshot();
+                    _trimDragMode = 2;
+                }
+            }
+
             _isDraggingPlayhead = true;
             TimelineCanvas.CaptureMouse();
-            UpdatePlayheadFromMouse(e.GetPosition(TimelineCanvas).X);
+            if (_trimDragMode == 0)
+                UpdatePlayheadFromMouse(pt.X);
         }
 
         private void TimelineCanvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            if (_isDraggingPlayhead)
+            if (!_isDraggingPlayhead) return;
+            double mouseX = e.GetPosition(TimelineCanvas).X;
+
+            if (_trimDragMode != 0 && _currentProject?.Clips != null &&
+                _selectedClipIndex >= 0 && _selectedClipIndex < _currentProject.Clips.Count)
             {
-                UpdatePlayheadFromMouse(e.GetPosition(TimelineCanvas).X);
+                double trackAreaW = Math.Max(100, TimelineCanvas.ActualWidth - 115);
+                double totalDur = Math.Max(1.0, _currentProject.TotalDurationSec);
+                double norm = Math.Clamp((mouseX - 105) / trackAreaW, 0.0, 1.0);
+                double tSec = Math.Round(norm * totalDur, 2);
+                var sel = _currentProject.Clips[_selectedClipIndex];
+
+                if (_trimDragMode == 1)
+                {
+                    sel.SourceStartSec = Math.Clamp(tSec, 0.0, Math.Max(0.0, sel.SourceEndSec - 0.25));
+                    _playheadSec = sel.SourceStartSec;
+                }
+                else if (_trimDragMode == 2)
+                {
+                    sel.SourceEndSec = Math.Clamp(tSec, sel.SourceStartSec + 0.25, totalDur);
+                    _playheadSec = sel.SourceEndSec;
+                }
+
+                if (CapCutMediaPlayer != null && CapCutMediaPlayer.Source != null)
+                {
+                    try { CapCutMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec); } catch { }
+                }
+                TxtTimelineTimecode.Text = $"{FormatShortTime(_playheadSec)} / {FormatShortTime(totalDur)}";
+                TxtStatusBanner.Text = $"✂️ Klip Ucu Kırpılıyor ({sel.Label}): {sel.SourceStartSec:0.00}s — {sel.SourceEndSec:0.00}s";
+                RedrawTimeline();
+                return;
             }
+
+            UpdatePlayheadFromMouse(mouseX);
         }
 
         private void TimelineCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -2180,6 +2419,7 @@ namespace CircleMixRecord
             if (_isDraggingPlayhead)
             {
                 _isDraggingPlayhead = false;
+                _trimDragMode = 0;
                 TimelineCanvas.ReleaseMouseCapture();
             }
         }
@@ -2212,6 +2452,7 @@ namespace CircleMixRecord
             }
 
             TxtTimelineTimecode.Text = $"{FormatShortTime(_playheadSec)} / {FormatShortTime(totalDur)}";
+            UpdateLiveSubtitleOverlay();
             RedrawTimeline();
         }
 
@@ -2336,6 +2577,34 @@ namespace CircleMixRecord
                 Canvas.SetLeft(bdr, x1);
                 Canvas.SetTop(bdr, rowTops[1] + 2);
                 TimelineCanvas.Children.Add(bdr);
+
+                // Seçili klibin sol ve sağ uçlarında sürüklenebilir Turuncu Trim Tutamaçları (#EF5F18)
+                if (i == _selectedClipIndex && !c.IsDeleted && w >= 14)
+                {
+                    var leftHandle = new Border
+                    {
+                        Width = 5,
+                        Height = rowHeights[1] - 4,
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        CornerRadius = new CornerRadius(3, 0, 0, 3),
+                        ToolTip = "Başlangıç noktasını kırpmak için sürükleyin"
+                    };
+                    Canvas.SetLeft(leftHandle, x1);
+                    Canvas.SetTop(leftHandle, rowTops[1] + 2);
+                    TimelineCanvas.Children.Add(leftHandle);
+
+                    var rightHandle = new Border
+                    {
+                        Width = 5,
+                        Height = rowHeights[1] - 4,
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        CornerRadius = new CornerRadius(0, 3, 3, 0),
+                        ToolTip = "Bitiş noktasını kırpmak için sürükleyin"
+                    };
+                    Canvas.SetLeft(rightHandle, Math.Max(x1 + 5, x1 + w - 5));
+                    Canvas.SetTop(rightHandle, rowTops[1] + 2);
+                    TimelineCanvas.Children.Add(rightHandle);
+                }
             }
 
             // 3. V2 Katmanı: Circle Portrait 9:16 Odak & Tıklama Keyframe Elmasları
