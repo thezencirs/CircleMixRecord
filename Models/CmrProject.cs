@@ -1,4 +1,4 @@
-// Copyright (c) 2026 thezencirs (https://github.com/thezencirs)
+﻿// Copyright (c) 2026 thezencirs (https://github.com/thezencirs)
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 
 using System;
@@ -27,17 +27,156 @@ namespace CircleMixRecord.Models
     public enum OverlayMaskShape
     {
         RoundedBox = 0,            // Yuvarlatılmış Çerçeve
-        CircleMask = 1,            // Daire Maske (Circle Edit Stil)
+        CircleMask = 1,            // Daire Maske (Circle Studio Stil)
         ChromaKeyGreen = 2,        // Yeşil Perde Silici (Chroma Key)
         FullScreenWatermark = 3    // Yarı Saydam Tam Ekran / Filigran Bindirme
     }
 
     public enum ColorLutPreset
     {
-        NaturalStudio = 0,         // Doğal Stüdyo
-        CinematicEdits = 1,        // Circle Sinematik Kontrast
-        WarmGolden = 2,            // Sıcak Altın Saat (Warm LUT)
-        CrispCad3D = 3             // 3B CAD/BIM Keskin & Net Çizgi Modu
+        NaturalStudio = 0,         // 00 • Doğal Stüdyo
+        LogToRec709 = 1,           // 01 • Kamera Log ➔ Rec.709 Düzeltme
+        AmberWarm = 2,             // 02 • Amber Sıcak Altın
+        BlueHour = 3,              // 03 • Blue Hour (Mavi Saat)
+        CrispStudio = 4,           // 04 • Crisp (Kristal Netlik)
+        EuphoriaCinema = 5,        // 05 • Euphoria (Sinematik Kontrast)
+        FrostyCool = 6,            // 06 • Frosty (Soğuk Stüdyo)
+        GlowSoft = 7,              // 07 • Glow (Yumuşak Işıltı)
+        IndigoDeep = 8,            // 08 • Indigo (Derin Gece)
+        JadeEmerald = 9,           // 09 • Jade (Zümrüt Ton)
+        RedVelvet = 10,            // 10 • Red Velvet (Kadife Sıcak)
+        VibrantPop = 11,           // 11 • Vibrant (Canlı Renkler)
+        VintageWarm = 12,          // 12 • Vintage (Nostaljik Film)
+        GreyscaleNoir = 13,        // 13 • Noir (Siyah Beyaz)
+        CrispCad3D = 14            // 14 • 3B CAD/BIM Keskin Çizgi
+    }
+
+    public enum SpeedCurvePreset
+    {
+        Constant = 0,              // Sabit Hız (0.5x .. 30x)
+        Montage = 1,               // Montage (0.9x ➔ 6.8x ➔ 0.3x ➔ 1.0x)
+        Hero = 2,                  // Hero (1.0x ➔ 5.5x ➔ 0.5x ➔ 5.5x ➔ 1.0x)
+        Bullet = 3,                // Bullet (5.2x ➔ 0.5x ➔ 5.2x)
+        JumpCut = 4,               // Jump Cut (0.6x ➔ 6.0x ➔ 0.6x)
+        FlashIn = 5,               // Flash In (5.2x ➔ 1.0x)
+        FlashOut = 6,              // Flash Out (1.0x ➔ 5.2x)
+        Ramp = 7,                  // Ramp (5.0x ➔ 1.0x ➔ 5.0x)
+        Strobe = 8                 // Strobe (1.0x ⇄ 5.0x Ritim)
+    }
+
+    public enum ClipTransitionPreset
+    {
+        Fade = 0,                  // Yumuşak Geçiş (Dissolve)
+        ZoomIn = 1,                // Hyperwarp Zoom In
+        SlideLeft = 2,             // Sola Kaydır (Slide Left)
+        SlideRight = 3,            // Sağa Kaydır (Slide Right)
+        SlideUp = 4,               // Yukarı Kaydır (Slide Up)
+        SlideDown = 5,             // Aşağı Kaydır (Slide Down)
+        CircleOpen = 6,            // Daire Açılma (Circle In)
+        CircleClose = 7,           // Daire Kapanma (Circle Out)
+        RadialClock = 8,           // Saat Yönü (Clock Wipe)
+        DiagTlBr = 9,              // Çapraz Silme (Diagonal Wipe)
+        FadeWhite = 10,            // Işık Patlaması (Flash In-Out)
+        HBlur = 11                 // Bulanık Geçiş (Stretch Blur)
+    }
+
+    public enum CaptionStylePreset
+    {
+        ClassicBox = 0,            // Klasik Stüdyo Kutu (#140E38)
+        OrangeKaraoke = 1,         // Turuncu Vurgu (#EF5F18 Karaoke)
+        MinimalCinema = 2,         // Minimal Sinema (Kutusuz)
+        TopBanner = 3              // Üst Başlık Bandı (#261A66)
+    }
+
+    public sealed class SpeedCurvePoint
+    {
+        public double NormalizedProgress { get; set; } // 0 .. 100
+        public double Speed { get; set; } = 1.0;       // 0.25 .. 10.0
+    }
+
+    public static class SpeedCurveCatalog
+    {
+        public static List<SpeedCurvePoint> GetPresetPoints(SpeedCurvePreset preset, double constantSpeed = 1.0)
+        {
+            return preset switch
+            {
+                SpeedCurvePreset.Montage => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 0.9 },
+                    new() { NormalizedProgress = 10, Speed = 0.9 },
+                    new() { NormalizedProgress = 50, Speed = 6.8 },
+                    new() { NormalizedProgress = 65, Speed = 0.3 },
+                    new() { NormalizedProgress = 80, Speed = 1.0 },
+                    new() { NormalizedProgress = 100, Speed = 1.0 }
+                },
+                SpeedCurvePreset.Hero => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 1.0 },
+                    new() { NormalizedProgress = 6, Speed = 1.0 },
+                    new() { NormalizedProgress = 39, Speed = 5.5 },
+                    new() { NormalizedProgress = 46, Speed = 0.5 },
+                    new() { NormalizedProgress = 56, Speed = 0.5 },
+                    new() { NormalizedProgress = 66, Speed = 5.5 },
+                    new() { NormalizedProgress = 97, Speed = 1.0 },
+                    new() { NormalizedProgress = 100, Speed = 1.0 }
+                },
+                SpeedCurvePreset.Bullet => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 5.2 },
+                    new() { NormalizedProgress = 39, Speed = 5.2 },
+                    new() { NormalizedProgress = 47, Speed = 0.5 },
+                    new() { NormalizedProgress = 53, Speed = 0.5 },
+                    new() { NormalizedProgress = 61, Speed = 5.2 },
+                    new() { NormalizedProgress = 100, Speed = 5.2 }
+                },
+                SpeedCurvePreset.JumpCut => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 0.6 },
+                    new() { NormalizedProgress = 43, Speed = 0.6 },
+                    new() { NormalizedProgress = 50, Speed = 6.0 },
+                    new() { NormalizedProgress = 57, Speed = 0.6 },
+                    new() { NormalizedProgress = 100, Speed = 0.6 }
+                },
+                SpeedCurvePreset.FlashIn => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 5.2 },
+                    new() { NormalizedProgress = 40, Speed = 5.2 },
+                    new() { NormalizedProgress = 60, Speed = 1.0 },
+                    new() { NormalizedProgress = 100, Speed = 1.0 }
+                },
+                SpeedCurvePreset.FlashOut => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 1.0 },
+                    new() { NormalizedProgress = 40, Speed = 1.0 },
+                    new() { NormalizedProgress = 60, Speed = 5.2 },
+                    new() { NormalizedProgress = 100, Speed = 5.2 }
+                },
+                SpeedCurvePreset.Ramp => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 5.0 },
+                    new() { NormalizedProgress = 20, Speed = 5.0 },
+                    new() { NormalizedProgress = 25, Speed = 1.0 },
+                    new() { NormalizedProgress = 60, Speed = 1.0 },
+                    new() { NormalizedProgress = 65, Speed = 5.0 },
+                    new() { NormalizedProgress = 100, Speed = 5.0 }
+                },
+                SpeedCurvePreset.Strobe => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = 1.0 },
+                    new() { NormalizedProgress = 16.7, Speed = 5.0 },
+                    new() { NormalizedProgress = 33.3, Speed = 1.0 },
+                    new() { NormalizedProgress = 50, Speed = 5.0 },
+                    new() { NormalizedProgress = 66.7, Speed = 1.0 },
+                    new() { NormalizedProgress = 83.3, Speed = 5.0 },
+                    new() { NormalizedProgress = 100, Speed = 1.0 }
+                },
+                _ => new List<SpeedCurvePoint>
+                {
+                    new() { NormalizedProgress = 0, Speed = constantSpeed },
+                    new() { NormalizedProgress = 100, Speed = constantSpeed }
+                }
+            };
+        }
     }
 
     public class CameraKeyframe
@@ -78,7 +217,7 @@ namespace CircleMixRecord.Models
     {
         public double TimeSec { get; set; }
         public string Title { get; set; } = "Önemli Nokta";
-        public string ColorHex { get; set; } = "#F59E0B";
+        public string ColorHex { get; set; } = "#EF5F18";
     }
 
     public class SubtitleItem
@@ -96,12 +235,12 @@ namespace CircleMixRecord.Models
         public bool ShowScreen { get; set; } = true;
         public bool ShowWebcam { get; set; } = true;
         public double WebcamScale { get; set; } = 0.22;
-        public SmartPortraitLayout DefaultPortraitLayout { get; set; } = SmartPortraitLayout.FullFill9x16;
+        public SmartPortraitLayout DefaultPortraitLayout { get; set; } = SmartPortraitLayout.SplitScreenCamBottom;
     }
 
     public class CmrProject
     {
-        public string FormatVersion { get; set; } = "CircleMixRecord-v1.0";
+        public string FormatVersion { get; set; } = "CircleStudio-v1.1";
         public string ProjectName { get; set; } = "Yeni_Ders_Kaydi";
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public string ProjectDirectory { get; set; } = "";
@@ -110,7 +249,7 @@ namespace CircleMixRecord.Models
         // Medya Dosyaları (Master Kaynaklar Korunur -> Non-Destructive Kurgu)
         public string MasterCleanVideoPath { get; set; } = "";     // Kırpılmamış 16:9 Master (.mkv)
         public string Horizontal16x9VideoPath { get; set; } = "";  // 16:9 Yatay Ders Çıktısı (.mp4)
-        public string Vertical9x16VideoPath { get; set; } = "";    // 9:16 Dikey Reels Çıktısı (.mp4)
+        public string Vertical9x16VideoPath { get; set; } = "";    // 9:16 Dikey Video Çıktısı (.mp4)
         public string MicrophoneWavPath { get; set; } = "";        // Ayrı Mikrofon Kanalı (.wav)
         public string SystemAudioWavPath { get; set; } = "";       // Ayrı Sistem/Masaüstü Ses Kanalı (.wav)
 
@@ -144,8 +283,13 @@ namespace CircleMixRecord.Models
         public bool EnableLufsNormalization { get; set; } = true;
         public double TargetLufs { get; set; } = -14.0;
         public bool BurnInSubtitles { get; set; } = true;
+        public CaptionStylePreset CaptionStyle { get; set; } = CaptionStylePreset.ClassicBox;
 
-        // Circle Edit & Studio: Dışarıdan Medya Birleştirme, Bindirme (PIP), Maskeleme & Müzik
+        // Circle Studio Edit: Hız Eğrisi, Geçiş Kataloğu, Renk & LUT, İnce Ayarlar, Bindirme (PIP) & Müzik
+        public SpeedCurvePreset ActiveSpeedCurve { get; set; } = SpeedCurvePreset.Constant;
+        public ClipTransitionPreset TransitionPreset { get; set; } = ClipTransitionPreset.Fade;
+        public double TransitionDurationSec { get; set; } = 0.60;
+
         public List<string> ExternalMergedVideoPaths { get; set; } = new();
         public string PipOverlayMediaPath { get; set; } = "";
         public OverlayMaskShape PipMaskShape { get; set; } = OverlayMaskShape.RoundedBox;
@@ -153,7 +297,14 @@ namespace CircleMixRecord.Models
         public double PipScalePercent { get; set; } = 28.0;
         public string ExternalAudioTrackPath { get; set; } = "";
         public double ExternalAudioVolumePercent { get; set; } = 18.0;
+
         public ColorLutPreset ColorFilter { get; set; } = ColorLutPreset.NaturalStudio;
+        public double AdjustBrightness { get; set; } = 0.0;        // -50 .. +50
+        public double AdjustContrast { get; set; } = 0.0;          // -50 .. +50
+        public double AdjustSaturation { get; set; } = 0.0;        // -50 .. +50
+        public double AdjustWarmth { get; set; } = 0.0;            // -50 .. +50
+        public double AdjustSharpen { get; set; } = 0.0;           // 0 .. 100
+        public double AdjustVignette { get; set; } = 0.0;          // 0 .. 100
 
         // Zaman Çizelgesi Verileri
         public List<CameraKeyframe> CameraKeyframes { get; set; } = new();
@@ -171,7 +322,7 @@ namespace CircleMixRecord.Models
             if (string.IsNullOrWhiteSpace(ProjectFilePath))
             {
                 string dir = string.IsNullOrWhiteSpace(ProjectDirectory)
-                    ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Kayitlar_ve_Projeler")
+                    ? CircleMixRecord.Services.HardwareEncoderService.GetBaseStorageDir()
                     : ProjectDirectory;
                 Directory.CreateDirectory(dir);
                 ProjectFilePath = Path.Combine(dir, $"{ProjectName}.cmrproj");
@@ -196,7 +347,7 @@ namespace CircleMixRecord.Models
         private void SaveSqlDump(string sqlPath)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("-- Circle Mix Record Non-Destructive Project SQLite Schema & Data");
+            sb.AppendLine("-- Circle Studio Non-Destructive Project SQLite Schema & Data");
             sb.AppendLine("BEGIN TRANSACTION;");
             sb.AppendLine("CREATE TABLE IF NOT EXISTS project_meta (key TEXT PRIMARY KEY, value TEXT);");
             sb.AppendLine("CREATE TABLE IF NOT EXISTS camera_keyframes (id INTEGER PRIMARY KEY AUTOINCREMENT, time_sec REAL, norm_x REAL, norm_y REAL, zoom REAL, is_click INTEGER);");

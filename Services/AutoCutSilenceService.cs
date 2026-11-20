@@ -404,5 +404,102 @@ namespace CircleMixRecord.Services
 
             return peaks;
         }
+
+        /// <summary>
+        /// Aktif video veya arka plan müziğindeki ritim / bas vuruşlarını (Transient / Onset)
+        /// gerçek PCM ses enerjisinden algılar, Timeline üzerine '🎵 BEAT' işaretçileri ekler
+        /// ve istenirse klipleri bu ritim noktalarından otomatik böler.
+        /// </summary>
+        public static List<double> DetectAudioBeatMarkers(CmrProject project, string preferredMediaPath, bool autoSplitClipsOnBeats = false)
+        {
+            var beats = new List<double>();
+            if (project == null) return beats;
+
+            string src = !string.IsNullOrWhiteSpace(project.ExternalAudioTrackPath) && File.Exists(project.ExternalAudioTrackPath)
+                ? project.ExternalAudioTrackPath
+                : (!string.IsNullOrWhiteSpace(preferredMediaPath) && File.Exists(preferredMediaPath)
+                    ? preferredMediaPath
+                    : (File.Exists(project.Horizontal16x9VideoPath) ? project.Horizontal16x9VideoPath : project.Vertical9x16VideoPath));
+
+            if (string.IsNullOrWhiteSpace(src) || !File.Exists(src))
+                return beats;
+
+            var peaks = ExtractRealWaveformPeaks(src, out double durSec, 720);
+            if (peaks.Count < 16 || durSec <= 0.8)
+                return beats;
+
+            double maxDur = project.TotalDurationSec > 0.5 ? project.TotalDurationSec : durSec;
+            double secPerBar = durSec / peaks.Count;
+            double lastBeatSec = -1.0;
+            const double minBeatIntervalSec = 0.65;
+
+            for (int i = 4; i < peaks.Count - 4; i++)
+            {
+                double t = i * secPerBar;
+                if (t < 0.35 || t > maxDur - 0.35) continue;
+
+                float cur = peaks[i];
+                float prev = peaks[i - 1];
+                float next = peaks[i + 1];
+                if (cur < prev || cur < next || cur < 0.22f) continue;
+
+                float localSum = 0f;
+                int localCnt = 0;
+                for (int w = Math.Max(0, i - 14); w <= Math.Min(peaks.Count - 1, i + 14); w++)
+                {
+                    localSum += peaks[w];
+                    localCnt++;
+                }
+                float localMean = localCnt > 0 ? localSum / localCnt : 0.1f;
+
+                if (cur >= localMean * 1.48f && (t - lastBeatSec) >= minBeatIntervalSec)
+                {
+                    double roundedBeat = Math.Round(t, 2);
+                    beats.Add(roundedBeat);
+                    lastBeatSec = roundedBeat;
+                    if (beats.Count >= 24) break;
+                }
+            }
+
+            // Eski BEAT işaretçilerini temizleyip yeni ritim vuruşlarını ekle
+            project.Markers.RemoveAll(m => m.Title != null && m.Title.StartsWith("🎵 BEAT", StringComparison.OrdinalIgnoreCase));
+            foreach (double b in beats)
+            {
+                project.Markers.Add(new TimelineMarker
+                {
+                    TimeSec = b,
+                    Title = $"🎵 BEAT {b:0.0}s",
+                    ColorHex = "#EF5F18"
+                });
+            }
+
+            if (autoSplitClipsOnBeats && beats.Count > 0 && project.Clips != null && project.Clips.Count > 0)
+            {
+                foreach (double b in beats)
+                {
+                    for (int ci = 0; ci < project.Clips.Count; ci++)
+                    {
+                        var c = project.Clips[ci];
+                        if (!c.IsDeleted && b > c.SourceStartSec + 0.35 && b < c.SourceEndSec - 0.35)
+                        {
+                            double origEnd = c.SourceEndSec;
+                            c.SourceEndSec = b;
+                            project.Clips.Insert(ci + 1, new TimelineClip
+                            {
+                                Label = $"Ritim #{ci + 2}",
+                                SourceStartSec = b,
+                                SourceEndSec = origEnd,
+                                SpeedMultiplier = c.SpeedMultiplier,
+                                IsDeleted = false,
+                                IsSilentSegment = false
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return beats;
+        }
     }
 }

@@ -1,10 +1,10 @@
-<Application x:Class="CircleMixRecord.App"
+﻿<Application x:Class="CircleMixRecord.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <!-- ========================================================================= -->
-        <!-- CIRCLE MIX RECORD — APPLE MINIMALISM PALETTE (#FFFFFF • #EF5F18 • #261A66) -->
+        <!-- CIRCLE MIX RECORD — CIRCLE STUDIO MINIMALISM PALETTE (#FFFFFF • #EF5F18 • #261A66) -->
         <!-- ========================================================================= -->
         <SolidColorBrush x:Key="CircleDeepBg" Color="#140E38"/>
         <SolidColorBrush x:Key="CirclePanelBg" Color="#1C134C"/>
@@ -14,7 +14,7 @@
         <SolidColorBrush x:Key="CircleWhite" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="CircleSoftWhite" Color="#B8B0DC"/>
 
-        <!-- Minimalist Apple-Style Pill Button -->
+        <!-- Minimalist Circle Studio Pill Button -->
         <Style TargetType="Button">
             <Setter Property="Background" Value="#261A66"/>
             <Setter Property="Foreground" Value="#FFFFFF"/>
@@ -97,3 +97,4 @@
         </Style>
     </Application.Resources>
 </Application>
+

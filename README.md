@@ -1,4 +1,4 @@
-# CircleMixRecord
+﻿# CircleMixRecord
 
 **Windows için tek tuşla çift tuval (`16:9` Yatay + `9:16` Dikey) ekran kaydedici, 6 haneli kodla canlı toplantı / uzaktan bağlantı (`Circle Meet`) ve tümleşik video kurgu + `60 FPS Timelapse` stüdyosu.**
 
@@ -14,7 +14,7 @@
 
 1. **Circle Dual-Canvas Kayıt (`16:9` Yatay + `9:16` Dikey Eşzamanlı):**
    - Tek tuşla (`Ctrl + Shift + R`) aynı anda hem geniş ekran (`1920x1080` veya `3840x2160 4K UHD`) hem de imleç takipli dikey (`1080x1920`) kayıt alır.
-   - Yatay ve dikey videoları otomatik olarak ayrı klasörlere (`Yatay_16x9_Kayitlar\` ve `Dikey_9x16_Reels_Kayitlar\`) ayırır.
+   - Yatay ve dikey videoları otomatik olarak ayrı klasörlere (`Yatay_16x9_Kayitlar\` ve `Dikey_9x16_Kayitlar\`) ayırır.
    - `WriteableBitmap` sıfır-tahsisatlı canlı önizleme ve `NVENC / QSV / AMF` donanım kodlama ile bilgisayarı yormadan yüksek kalitede (`CQP 16`) kayıt yapar.
 2. **Circle Meet & Uzaktan Bağlantı (6 Haneli Kod):**
    - Ek bir uzak masaüstü veya toplantı yazılımına ihtiyaç duymadan 6 haneli Circle koduyla canlı sınıf/toplantı açar.
@@ -82,3 +82,4 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ## Lisans
 
 [MIT](LICENSE) © 2026 [thezencirs](https://github.com/thezencirs)
+

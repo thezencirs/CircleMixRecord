@@ -1,4 +1,4 @@
-// Copyright (c) 2026 thezencirs (https://github.com/thezencirs)
+﻿// Copyright (c) 2026 thezencirs (https://github.com/thezencirs)
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 
 using System;
@@ -50,8 +50,8 @@ namespace CircleMixRecord
         // Circle Edit Kurgu Oynatıcı & Undo Durumu
         private bool _isPlayerPlaying = false;
         private bool _isPlayerMuted = false;
-        private bool _isCapCutShowingVertical = false;
-        private string _activeCapCutVideoPath = "";
+        private bool _isCircleEditShowingVertical = false;
+        private string _activeCircleEditVideoPath = "";
         private double _activeTimelapseSpeed = 1.0;
         private System.Windows.Point _folderDragStartPoint;
         private readonly Stack<List<TimelineClip>> _undoStack = new();
@@ -74,6 +74,7 @@ namespace CircleMixRecord
         private const int HK_SCENE_2 = 9015;        // Alt + Shift + 2 (Sahne 2)
         private const int HK_SCENE_3 = 9016;        // Alt + Shift + 3 (Sahne 3)
         private const int HK_SCENE_4 = 9017;        // Alt + Shift + 4 (Sahne 4)
+        private const int HK_INTERMISSION = 9030;   // Alt + Shift + B (Bekleme Ekranı)
 
         public MainWindow()
         {
@@ -84,9 +85,14 @@ namespace CircleMixRecord
             {
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
+                    if (!_meetServer.IsRunning) return;
                     TxtMeetUrl.Text = pubUrl;
-                    TxtStatusBanner.Text = $"Canlı Oda aktif • Oda Kodu: {_meetServer.RoomCode}";
+                    TxtStatusBanner.Text = $"Canlı Oda internete açıldı • Oda Kodu: {_meetServer.RoomCode} • PIN: {_meetServer.RoomPin}";
                 }));
+            };
+            _meetServer.OnRemoteControlRequested += (cid, name) =>
+            {
+                Dispatcher.BeginInvoke(new Action(() => ShowRemoteControlApprovalDialog(cid, name)));
             };
 
             _uiTimer = new DispatcherTimer
@@ -131,6 +137,7 @@ namespace CircleMixRecord
                 RegisterHotKey(_hwnd, HK_SCENE_2, ALT_SHIFT, 0x32);         // Alt + Shift + 2
                 RegisterHotKey(_hwnd, HK_SCENE_3, ALT_SHIFT, 0x33);         // Alt + Shift + 3
                 RegisterHotKey(_hwnd, HK_SCENE_4, ALT_SHIFT, 0x34);         // Alt + Shift + 4
+            RegisterHotKey(_hwnd, HK_INTERMISSION, ALT_SHIFT, 0x42);    // Alt + Shift + B
             }
             catch { }
 
@@ -142,16 +149,166 @@ namespace CircleMixRecord
             HardwareEncoderService.GetEditedExportsDir();
 
             // Sıfır-Allocation WriteableBitmap Önizleme Tuvalini Hazırla (Donma / Duraksama = 0)
-            _wb16x9 = new WriteableBitmap(1280, 720, 96, 96, PixelFormats.Bgr24, null);
-            _wb9x16 = new WriteableBitmap(540, 960, 96, 96, PixelFormats.Bgr24, null);
+            _wb16x9 = new WriteableBitmap(DualCanvasEngine.Canvas16W, DualCanvasEngine.Canvas16H, 96, 96, PixelFormats.Bgr24, null);
+            _wb9x16 = new WriteableBitmap(DualCanvasEngine.Canvas9W, DualCanvasEngine.Canvas9H, 96, 96, PixelFormats.Bgr24, null);
             ImgPreview16x9.Source = _wb16x9;
             ImgPreview9x16.Source = _wb9x16;
 
             // Başlangıç boş Circle Edit kurgu projesini hazırla ve doğrudan Sade Stüdyo Tuvalini aç
             InitializeStarterTimelineProject();
-            RefreshCapCutFolderLists();
+            RefreshCircleEditFolderLists();
             RegenerateSocialMediaMetadata();
-            SetStudioViewMode("Record");
+
+            var cmdArgs = Environment.GetCommandLineArgs();
+            bool openInEdit = cmdArgs.Any(a => string.Equals(a, "--edit", StringComparison.OrdinalIgnoreCase));
+            string screenshotTarget = cmdArgs.Any(a => string.Equals(a, "--screenshot", StringComparison.OrdinalIgnoreCase))
+                ? System.IO.Path.Combine(HardwareEncoderService.GetBaseStorageDir(), $"CircleMixRecord_Ekran_{DateTime.Now:yyyyMMdd_HHmmss}.png")
+                : null;
+            for (int i = 1; i < cmdArgs.Length - 1; i++)
+            {
+                if (string.Equals(cmdArgs[i], "--screenshot", StringComparison.OrdinalIgnoreCase) && !cmdArgs[i + 1].StartsWith("-"))
+                {
+                    screenshotTarget = cmdArgs[i + 1];
+                    break;
+                }
+            }
+            string editTarget = cmdArgs.Skip(1).FirstOrDefault(a => !a.StartsWith("-") && !string.Equals(a, screenshotTarget, StringComparison.OrdinalIgnoreCase) && File.Exists(a));
+
+            if (openInEdit || !string.IsNullOrWhiteSpace(editTarget))
+            {
+                if (ChkProView != null) ChkProView.IsChecked = true;
+                SetStudioViewMode("Edit");
+                if (RightTabControl != null) RightTabControl.SelectedIndex = 2; // Kurgu & Medya sekmesi
+                if (!string.IsNullOrWhiteSpace(editTarget))
+                {
+                    bool isVert = editTarget.Contains("9x16", StringComparison.OrdinalIgnoreCase) || editTarget.Contains("Dikey", StringComparison.OrdinalIgnoreCase);
+                    LoadVideoIntoCircleEditEditor(editTarget, isVertical: isVert, preserveCurrentProject: false);
+                }
+                else if (LstHorizFolderFiles.Items.Count > 0 && LstHorizFolderFiles.Items[0] is FolderMediaItem hFirst && hFirst.FilePath.Contains("ElegancePalace", StringComparison.OrdinalIgnoreCase))
+                {
+                    LstHorizFolderFiles.SelectedIndex = 0;
+                    LoadVideoIntoCircleEditEditor(hFirst.FilePath, isVertical: false, preserveCurrentProject: false);
+                }
+                else if (LstVertFolderFiles.Items.Count > 0 && LstVertFolderFiles.Items[0] is FolderMediaItem vFirst)
+                {
+                    LstVertFolderFiles.SelectedIndex = 0;
+                    LoadVideoIntoCircleEditEditor(vFirst.FilePath, isVertical: true, preserveCurrentProject: false);
+                }
+
+                bool merge4kCli = cmdArgs.Any(a => string.Equals(a, "--merge-4k", StringComparison.OrdinalIgnoreCase));
+                if (CircleEditMediaPlayer != null && (merge4kCli || !string.IsNullOrWhiteSpace(screenshotTarget)))
+                {
+                    CircleEditMediaPlayer.IsMuted = true;
+                    CircleEditMediaPlayer.Volume = 0;
+                }
+
+                // Normal "--edit" açılışı artık hazır demo içerik YÜKLEMEZ: boş editör veya kullanıcının seçtiği dosya.
+                // Aşağıdaki sahne keşfi yalnızca ayrı "--merge-4k" komut satırı yolunda çalışır (eksik klasörler korumalı).
+                if (_currentProject != null && merge4kCli)
+                {
+                    string horizRecDir = HardwareEncoderService.GetHorizontalRecordingsDir();
+                    string vertRecDir = HardwareEncoderService.GetVerticalRecordingsDir();
+                    var flowScenes = Directory.Exists(horizRecDir)
+                        ? Directory.GetFiles(horizRecDir, "0*_ElegancePalace_*.mp4")
+                            .OrderBy(f => f)
+                            .ToList()
+                        : new List<string>();
+                    if (flowScenes.Count == 0 && Directory.Exists(vertRecDir))
+                    {
+                        flowScenes = Directory.GetFiles(vertRecDir, "0*_*.mp4")
+                            .Concat(Directory.GetFiles(vertRecDir, "1*_*.mp4"))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(f => f)
+                            .ToList();
+                    }
+                    if (flowScenes.Count > 0 && TxtMergedVideosStatus != null)
+                    {
+                        _currentProject.ExternalMergedVideoPaths = flowScenes;
+                        TxtMergedVideosStatus.Text = $"✅ Circle Mix 4K birleştirme listesi ({flowScenes.Count} sahne): " +
+                                                     string.Join(" ➔ ", flowScenes.Select(System.IO.Path.GetFileName));
+                    }
+
+                    string luxuryAudio = System.IO.Path.Combine(HardwareEncoderService.GetBaseStorageDir(), "Zencircle_Iskocya_BeatSync_Cello_Piano_SubDrop_48kHz.wav");
+                    if (File.Exists(luxuryAudio))
+                    {
+                        _currentProject.ExternalAudioTrackPath = luxuryAudio;
+                        if (TxtExternalAudioStatus != null)
+                            TxtExternalAudioStatus.Text = $"🎵 Arka plan müziği: {System.IO.Path.GetFileName(luxuryAudio)}";
+                    }
+
+                    if (flowScenes.Count > 0)
+                    {
+                        string[] lensLabels = new[]
+                        {
+                            "01 • [Kapı Girişi] Crane Down & Dolly-In",
+                            "02 • [Perde & Masa] Sinematik Zoom-In",
+                            "03 • [Elit Orkestra] Sahne Tilt-Up",
+                            "04 • [Mermer Pist] Crane Down & Pull-Out",
+                            "05 • [Giriş Dansı] Orbital Zoom-In",
+                            "06 • [Elit Davetliler] Alkış & Rack Focus",
+                            "07 • [Mermer Masa] Alçak Açı Dolly-In",
+                            "08 • [Final] Kameraya Bakış & Crane-Up"
+                        };
+                        double stepSec = 7.5;
+                        _currentProject.TotalDurationSec = Math.Round(flowScenes.Count * stepSec, 2);
+                        _currentProject.Clips = new List<TimelineClip>();
+                        for (int ci = 0; ci < flowScenes.Count; ci++)
+                        {
+                            string lbl = ci < lensLabels.Length ? lensLabels[ci] : $"{ci + 1:00} • Sahne {ci + 1}";
+                            _currentProject.Clips.Add(new TimelineClip
+                            {
+                                Label = lbl,
+                                SourceStartSec = Math.Round(ci * stepSec, 2),
+                                SourceEndSec = Math.Round((ci + 1) * stepSec, 2),
+                                SpeedMultiplier = 0.98
+                            });
+                        }
+                        RedrawTimeline();
+
+                        await ExecuteNativeCircleMix4KMergeAsync(showDialogOnComplete: false);
+                        if (CircleEditMediaPlayer != null)
+                        {
+                            CircleEditMediaPlayer.IsMuted = true;
+                            CircleEditMediaPlayer.Volume = 0;
+                        }
+                        await Task.Delay(900);
+                        SeekCircleEditPlayer(53.8);
+                        RedrawTimeline();
+                    }
+                    else
+                    {
+                        TxtStatusBanner.Text = "--merge-4k: Birleştirilecek sahne bulunamadı.";
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(screenshotTarget))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(2600);
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                var rootVis = this.Content as FrameworkElement;
+                                int w = Math.Max(1280, (int)(rootVis?.ActualWidth > 0 ? rootVis.ActualWidth : ActualWidth));
+                                int h = Math.Max(780, (int)(rootVis?.ActualHeight > 0 ? rootVis.ActualHeight : ActualHeight));
+                                var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                                rtb.Render((Visual)(this.Content ?? this));
+                                var enc = new PngBitmapEncoder();
+                                enc.Frames.Add(BitmapFrame.Create(rtb));
+                                using var fs = File.Create(screenshotTarget);
+                                enc.Save(fs);
+                            }
+                            catch { }
+                        });
+                    });
+                }
+            }
+            else
+            {
+                SetStudioViewMode("Record");
+            }
 
             // Dual-Canvas motorunu anında başlat, kameraları arka planda algılayıp bağla
             _engine.OnRawFramesReady += Engine_OnRawFramesReady;
@@ -159,13 +316,11 @@ namespace CircleMixRecord
             _uiTimer.Start();
             RedrawTimeline();
 
-            // Circle Meet & Uzaktan Bağlantı Sunucusunu otomatik başlat ve 6 haneli kodu göster
+            // GÜVENLİK: Circle Meet sunucusu / internet tüneli / kod yayını açılışta BAŞLAMAZ.
+            // Yalnızca kullanıcı "Canlı Odayı Aç" (veya "Odamı Aç") dediğinde başlar.
             TxtMyRoomCode.Text = _meetServer.RoomCode;
             BtnWelcomeStartMeet.Content = $"Odamı Aç ({_meetServer.RoomCode})";
-            string meetUrl = await _meetServer.StartServerAsync();
-            TxtMeetUrl.Text = meetUrl;
-            BtnToggleMeet.Content = "Odayı Kapat";
-            BtnToggleMeet.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+            UpdateMeetUiState();
 
             await Task.Run(() =>
             {
@@ -176,11 +331,17 @@ namespace CircleMixRecord
 
             PopulateCameraCombo();
             var defaultCam = _videoDevices.FirstOrDefault();
-            var fallbackCam = _videoDevices.FirstOrDefault(d => !d.IsNvidiaBroadcast && !d.IsVirtual) ?? _videoDevices.Skip(1).FirstOrDefault();
+            var fallbackCam = _videoDevices.FirstOrDefault(d => !d.IsStudioBroadcast && !d.IsVirtual) ?? _videoDevices.Skip(1).FirstOrDefault();
             if (defaultCam != null)
             {
                 _engine.SwitchCamera(defaultCam, fallbackCam);
             }
+
+            // Kamera arka plan modu varsayılanı: 1 • DSLR Bokeh Bulanık Arka Plan (özel görsel kullanıcı seçerse yüklenir)
+            _engine.WebcamBgMode = 1;
+            LoadStreamSettingsIntoUi();
+
+            UpdateCoursePrompterUI(0);
         }
 
         private void InitializeStarterTimelineProject()
@@ -211,7 +372,7 @@ namespace CircleMixRecord
                 {
                     CmbCameras.Items.Add(dev);
                 }
-                CmbCameras.SelectedIndex = 0; // #1 Varsayılan: ⭐ Camera (NVIDIA Broadcast)
+                CmbCameras.SelectedIndex = 0; // #1 Varsayılan: ⭐ Camera (Circle Broadcast)
             }
 
             if (CmbMicrophones != null)
@@ -219,7 +380,7 @@ namespace CircleMixRecord
                 CmbMicrophones.Items.Clear();
                 if (_audioDevices.Count == 0)
                 {
-                    CmbMicrophones.Items.Add("⭐ Mikrofon (NVIDIA Broadcast) (Varsayılan)");
+                    CmbMicrophones.Items.Add("⭐ Mikrofon (Circle Broadcast) (Varsayılan)");
                     CmbMicrophones.SelectedIndex = 0;
                 }
                 else
@@ -228,7 +389,7 @@ namespace CircleMixRecord
                     {
                         CmbMicrophones.Items.Add(adev);
                     }
-                    CmbMicrophones.SelectedIndex = 0; // #1 Varsayılan: ⭐ Mikrofon (NVIDIA Broadcast)
+                    CmbMicrophones.SelectedIndex = 0; // #1 Varsayılan: ⭐ Mikrofon (Circle Broadcast)
                 }
             }
         }
@@ -301,6 +462,10 @@ namespace CircleMixRecord
                         LstScenes.SelectedIndex = 2;
                         handled = true;
                         break;
+                    case HK_INTERMISSION:
+                        ToggleIntermission();
+                        handled = true;
+                        break;
                     case HK_SCENE_4:
                         LstScenes.SelectedIndex = 3;
                         handled = true;
@@ -312,7 +477,7 @@ namespace CircleMixRecord
 
         private void Engine_OnRawFramesReady(byte[] raw16, int w16, int h16, byte[] raw9, int w9, int h9)
         {
-            if (_activeStudioMode == "Edit") return; // CapCut Kurgu ekranındayken canlı önizleme çizimi yapma (0% CPU)
+            if (_activeStudioMode == "Edit") return; // Circle Edit Kurgu ekranındayken canlı önizleme çizimi yapma (0% CPU)
 
             // Eğer UI thread bir önceki kareyi henüz çiziyorsa kuyruk biriktirme (Sıfır Donma / Sıfır Lag!)
             if (System.Threading.Interlocked.CompareExchange(ref _uiRenderBusy, 1, 0) != 0)
@@ -339,6 +504,9 @@ namespace CircleMixRecord
             double micDb = _engine.AudioEngine.CurrentMicDb;
             double sysDb = _engine.AudioEngine.CurrentSystemDb;
             TxtMicDb.Text = $"{micDb:0} dB";
+            UpdateStreamStatsUi();
+            if (_engine.AudioEngine.TryConsumeNotice(out string micNotice) && TxtStatusBanner != null)
+                TxtStatusBanner.Text = micNotice;
             TxtSysDb.Text = $"{sysDb:0} dB";
             BarMicLevel.Value = Math.Clamp(60.0 + micDb, 0, 60);
             BarSysLevel.Value = Math.Clamp(60.0 + sysDb, 0, 60);
@@ -352,11 +520,11 @@ namespace CircleMixRecord
             }
 
             // Circle Edit Video Oynatıcı Playhead Senkronizasyonu + Silinen Klipleri Otomatik Atlama + Canlı Timelapse Hızı
-            if (_activeStudioMode == "Edit" && _isPlayerPlaying && CapCutMediaPlayer.Source != null && !_isDraggingPlayhead)
+            if (_activeStudioMode == "Edit" && _isPlayerPlaying && CircleEditMediaPlayer.Source != null && !_isDraggingPlayhead)
             {
                 try
                 {
-                    double posSec = CapCutMediaPlayer.Position.TotalSeconds;
+                    double posSec = CircleEditMediaPlayer.Position.TotalSeconds;
                     if (posSec >= 0)
                     {
                         _playheadSec = posSec;
@@ -374,21 +542,21 @@ namespace CircleMixRecord
                                         double jumpTarget = c.SourceEndSec + 0.03;
                                         if (jumpTarget < _currentProject.TotalDurationSec)
                                         {
-                                            CapCutMediaPlayer.Position = TimeSpan.FromSeconds(jumpTarget);
+                                            CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(jumpTarget);
                                             _playheadSec = jumpTarget;
                                         }
                                         else
                                         {
-                                            PauseCapCutPlayer();
+                                            PauseCircleEditPlayer();
                                         }
                                         break;
                                     }
 
                                     // Klip hızına göre (Timelapse / 8x Dead Air) gerçek zamanlı oynatma hızını ayarla
                                     double targetRatio = Math.Clamp(c.SpeedMultiplier, 0.25, 8.0);
-                                    if (Math.Abs(CapCutMediaPlayer.SpeedRatio - targetRatio) > 0.05)
+                                    if (Math.Abs(CircleEditMediaPlayer.SpeedRatio - targetRatio) > 0.05)
                                     {
-                                        CapCutMediaPlayer.SpeedRatio = targetRatio;
+                                        CircleEditMediaPlayer.SpeedRatio = targetRatio;
                                     }
                                     break;
                                 }
@@ -435,23 +603,23 @@ namespace CircleMixRecord
             bool pro = ChkProView?.IsChecked == true;
             bool isEdit = (mode == "Edit");
 
-            // Circle Edit Kurgu ekranındayken arka plan ekran yakalamayı uyut (Bilgisayarı 0% yorar!)
+            // Circle Edit ekranındayken arka plan ekran yakalamayı uyut (Bilgisayarı 0% yorar!)
             _engine.IsEditorFocusMode = isEdit;
             if (!isEdit && _isPlayerPlaying)
             {
-                PauseCapCutPlayer();
+                PauseCircleEditPlayer();
             }
 
             OverlayWelcome.Visibility = mode == "Home" ? Visibility.Visible : Visibility.Collapsed;
             OverlaySocial.Visibility = mode == "Social" ? Visibility.Visible : Visibility.Collapsed;
 
-            // Orta Ekran Geçişi: Edit modunda Kayıt Ekranı KAPANIR, Tam Circle Edit Kurgu Monitörü AÇILIR!
+            // Orta Ekran Geçişi: Edit modunda Kurgu Monitörü, diğerlerinde Kayıt Ekranı!
             if (BdrLiveRecordPreview != null)
                 BdrLiveRecordPreview.Visibility = isEdit ? Visibility.Collapsed : Visibility.Visible;
-            if (BdrCapCutCenterMonitor != null)
-                BdrCapCutCenterMonitor.Visibility = isEdit ? Visibility.Visible : Visibility.Collapsed;
+            if (BdrCircleEditCenterMonitor != null)
+                BdrCircleEditCenterMonitor.Visibility = isEdit ? Visibility.Visible : Visibility.Collapsed;
 
-            // Apple Segmented Control vurguları (Transparent pasif & #EF5F18 aktif)
+            // Circle Mod Seçici vurguları (Transparent pasif & #EF5F18 aktif)
             var idleBg = System.Windows.Media.Brushes.Transparent;
             var activeOrange = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
 
@@ -463,42 +631,48 @@ namespace CircleMixRecord
             switch (mode)
             {
                 case "Home":
-                    SetPanelsVisibility(showLeftRecord: false, showLeftCapCutPool: false, showRight: false, showTimeline: false);
+                    SetPanelsVisibility(showLeftRecord: false, showLeftEditPool: false, showRight: false, showTimeline: false);
                     break;
 
                 case "Record":
-                    SetPanelsVisibility(showLeftRecord: pro, showLeftCapCutPool: false, showRight: pro, showTimeline: pro);
+                    if (RightTabControl != null && RightTabControl.SelectedIndex > 1)
+                        RightTabControl.SelectedIndex = 0; // 🎓 1+1+1 Eğitim Seti sekmesi
+                    SetPanelsVisibility(showLeftRecord: pro, showLeftEditPool: false, showRight: pro, showTimeline: pro);
                     break;
 
                 case "Meet":
-                    RightTabControl.SelectedIndex = 3; // Yayın & Meet sekmesi
-                    SetPanelsVisibility(showLeftRecord: pro, showLeftCapCutPool: false, showRight: true, showTimeline: pro);
+                    RightTabControl.SelectedIndex = 4; // Yayın & Meet sekmesi
+                    SetPanelsVisibility(showLeftRecord: pro, showLeftEditPool: false, showRight: true, showTimeline: pro);
                     break;
 
                 case "Edit":
-                    if (RightTabControl.SelectedIndex == 3)
-                        RightTabControl.SelectedIndex = 1; // Sessizlik Sil / Kurgu sekmesi
-                    RefreshCapCutFolderLists();
-                    // Edit modunda Sol Panelde Açık Yatay & Dikey Klasörler (BdrCapCutMediaPool) her zaman açık!
-                    SetPanelsVisibility(showLeftRecord: false, showLeftCapCutPool: true, showRight: pro, showTimeline: true);
-                    Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(RedrawTimeline));
+                    if (RightTabControl.SelectedIndex == 4 || RightTabControl.SelectedIndex == 0)
+                        RightTabControl.SelectedIndex = 3; // Renk, Hız Eğrisi & Geçiş sekmesi
+                    RefreshCircleEditFolderLists();
+                    // Edit modunda Sol Panelde Açık Yatay & Dikey Klasörler her zaman açık!
+                    SetPanelsVisibility(showLeftRecord: false, showLeftEditPool: true, showRight: pro, showTimeline: true);
+                    Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+                    {
+                        RedrawTimeline();
+                        RedrawSpeedCurveCanvas();
+                    }));
                     break;
 
                 case "Social":
                     RegenerateSocialMediaMetadata();
-                    SetPanelsVisibility(showLeftRecord: false, showLeftCapCutPool: false, showRight: false, showTimeline: false);
+                    SetPanelsVisibility(showLeftRecord: false, showLeftEditPool: false, showRight: false, showTimeline: false);
                     break;
             }
         }
 
-        private void SetPanelsVisibility(bool showLeftRecord, bool showLeftCapCutPool, bool showRight, bool showTimeline)
+        private void SetPanelsVisibility(bool showLeftRecord, bool showLeftEditPool, bool showRight, bool showTimeline)
         {
-            ColLeftPanel.Width = (showLeftRecord || showLeftCapCutPool) ? new GridLength(255) : new GridLength(0);
+            ColLeftPanel.Width = (showLeftRecord || showLeftEditPool) ? new GridLength(285) : new GridLength(0);
             BdrLeftPanel.Visibility = showLeftRecord ? Visibility.Visible : Visibility.Collapsed;
-            if (BdrCapCutMediaPool != null)
-                BdrCapCutMediaPool.Visibility = showLeftCapCutPool ? Visibility.Visible : Visibility.Collapsed;
+            if (BdrCircleEditMediaPool != null)
+                BdrCircleEditMediaPool.Visibility = showLeftEditPool ? Visibility.Visible : Visibility.Collapsed;
 
-            ColRightPanel.Width = showRight ? new GridLength(320) : new GridLength(0);
+            ColRightPanel.Width = showRight ? new GridLength(325) : new GridLength(0);
             BdrRightPanel.Visibility = showRight ? Visibility.Visible : Visibility.Collapsed;
 
             RowTimeline.Height = showTimeline ? new GridLength(210) : new GridLength(0);
@@ -534,19 +708,23 @@ namespace CircleMixRecord
         {
             if (!_meetServer.IsRunning)
             {
-                string url = await _meetServer.StartServerAsync();
-                TxtMeetUrl.Text = url;
-                BtnToggleMeet.Content = "● Canlı Odayı Kapat";
-                BtnToggleMeet.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+                await _meetServer.StartServerAsync();
+                UpdateMeetUiState();
+                if (!_meetServer.IsRunning)
+                {
+                    TxtStatusBanner.Text = "⚠️ Circle Meet odası başlatılamadı (5880 portu kullanımda olabilir).";
+                    return;
+                }
             }
 
             ChkShowMeetTiles.IsChecked = true;
             _engine.ShowMeetingOverlay = true;
             SetStudioViewMode("Meet");
 
+            string invite = _meetServer.BestInviteUrl;
             try
             {
-                System.Windows.Clipboard.SetText(TxtMeetUrl.Text);
+                System.Windows.Clipboard.SetText(invite);
             }
             catch { }
 
@@ -554,13 +732,119 @@ namespace CircleMixRecord
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = TxtMeetUrl.Text,
+                    FileName = invite,
                     UseShellExecute = true
                 });
             }
             catch { }
 
-            TxtStatusBanner.Text = $"Canlı Toplantı (Circle Meet) açıldı ve davet linki kopyalandı: {TxtMeetUrl.Text} — Kayda basarak toplantıyı 16:9 + 9:16 kaydedebilirsiniz!";
+            TxtStatusBanner.Text = $"Canlı Toplantı (Circle Meet) açıldı, davet linki kopyalandı • PIN: {_meetServer.RoomPin} — Kayda basarak toplantıyı 16:9 + 9:16 kaydedebilirsiniz!";
+        }
+
+        /// <summary>Meet panelindeki link / PIN / buton durumlarını sunucu durumuna göre günceller.</summary>
+        private void UpdateMeetUiState()
+        {
+            bool running = _meetServer.IsRunning;
+            if (TxtMeetUrl != null)
+                TxtMeetUrl.Text = running ? _meetServer.BestInviteUrl : "Oda kapalı — davet linki için 'Canlı Odayı Aç'a basın";
+            if (TxtMeetPin != null)
+                TxtMeetPin.Text = running ? _meetServer.RoomPin : "——————";
+            if (BtnToggleMeet != null)
+            {
+                BtnToggleMeet.Content = running ? "● Canlı Odayı Kapat" : "● Canlı Odayı Aç";
+                BtnToggleMeet.Background = running
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102))
+                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+            }
+        }
+
+        /// <summary>
+        /// Katılımcı uzaktan kontrol istediğinde host'a marka renklerinde "İzin ver / Reddet" onay penceresi gösterir.
+        /// </summary>
+        private void ShowRemoteControlApprovalDialog(string clientId, string participantName)
+        {
+            if (!_meetServer.IsRunning || !_meetServer.AllowRemoteControl) return;
+
+            var orange = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+            var surface = new SolidColorBrush(System.Windows.Media.Color.FromRgb(28, 19, 76));
+            var border = new SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 42, 148));
+            var card = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
+
+            var dlg = new Window
+            {
+                Title = "Circle Uzaktan Kontrol",
+                Width = 430,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                Background = surface,
+                Topmost = true,
+                ShowInTaskbar = false
+            };
+
+            bool approved = false;
+            var root = new StackPanel { Margin = new Thickness(20) };
+            root.Children.Add(new TextBlock
+            {
+                Text = "🖱️ CIRCLE UZAKTAN KONTROL İSTEĞİ",
+                Foreground = orange,
+                FontWeight = FontWeights.Bold,
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            root.Children.Add(new TextBlock
+            {
+                Text = $"{participantName} uzaktan kontrol istiyor — İzin ver / Reddet",
+                Foreground = System.Windows.Media.Brushes.White,
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            root.Children.Add(new TextBlock
+            {
+                Text = "İzin verirseniz bu katılımcı farenizi ve klavyenizi kullanabilir. İzni istediğiniz an 'Uzaktan Fare & Klavye Kontrolü' kutucuğunu kapatarak geri alabilirsiniz.",
+                Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(196, 181, 253)),
+                FontSize = 11.5,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 16)
+            });
+
+            var buttons = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var btnDeny = new System.Windows.Controls.Button
+            {
+                Content = "Reddet",
+                Padding = new Thickness(18, 7, 18, 7),
+                Margin = new Thickness(0, 0, 8, 0),
+                Background = card,
+                BorderBrush = border,
+                Foreground = System.Windows.Media.Brushes.White,
+                IsCancel = true,
+                IsDefault = true
+            };
+            var btnAllow = new System.Windows.Controls.Button
+            {
+                Content = "İzin ver",
+                Padding = new Thickness(18, 7, 18, 7),
+                Background = orange,
+                BorderBrush = orange,
+                Foreground = System.Windows.Media.Brushes.White,
+                FontWeight = FontWeights.Bold
+            };
+            btnDeny.Click += (_, __) => { approved = false; dlg.Close(); };
+            btnAllow.Click += (_, __) => { approved = true; dlg.Close(); };
+            buttons.Children.Add(btnDeny);
+            buttons.Children.Add(btnAllow);
+            root.Children.Add(buttons);
+            dlg.Content = root;
+
+            try { dlg.ShowDialog(); } catch { }
+
+            _meetServer.SetRemoteApproval(clientId, approved);
+            TxtStatusBanner.Text = approved
+                ? $"🖱️ {participantName} için Circle Uzaktan Kontrol izni verildi."
+                : $"🔒 {participantName} adlı katılımcının uzaktan kontrol isteği reddedildi.";
         }
 
         // ======================= SAHNE VE KAYNAK OLAYLARI =======================
@@ -574,28 +858,29 @@ namespace CircleMixRecord
                     ChkShowScreen.IsChecked = true;
                     ChkShowWebcam.IsChecked = true;
                     ChkShowMeetTiles.IsChecked = true;
-                    CmbPortraitLayout.SelectedIndex = 0;
+                    if (CmbWebcamCorner != null) CmbWebcamCorner.SelectedIndex = 0;
+                    CmbPortraitLayout.SelectedIndex = 2; // Ekran + Kamera: telefonda en okunur dikey düzen
                     break;
                 case 1: // Canlı Toplantı (Circle Meet + Katılımcılar)
                     ChkShowScreen.IsChecked = true;
                     ChkShowWebcam.IsChecked = true;
                     ChkShowMeetTiles.IsChecked = true;
-                    RightTabControl.SelectedIndex = 3;
+                    RightTabControl.SelectedIndex = 4;
                     break;
                 case 2: // Tam Ekran 3D Modelleme
                     ChkShowScreen.IsChecked = true;
                     ChkShowWebcam.IsChecked = false;
-                    CmbPortraitLayout.SelectedIndex = 0;
+                    CmbPortraitLayout.SelectedIndex = 2; // Kamera kapalıyken ekran kartı ortada, okunur yakınlıkta
                     break;
                 case 3: // Dikey Split (Üst Ekran + Alt Kamera)
                     ChkShowScreen.IsChecked = true;
                     ChkShowWebcam.IsChecked = true;
                     CmbPortraitLayout.SelectedIndex = 2;
                     break;
-                case 4: // Sadece Eğitmen Kamerası
+                case 4: // Sadece Eğitmen Kamerası (İntro / Outro)
                     ChkShowScreen.IsChecked = false;
                     ChkShowWebcam.IsChecked = true;
-                    SldCamScale.Value = 38;
+                    if (CmbWebcamCorner != null) CmbWebcamCorner.SelectedIndex = 5;
                     break;
             }
         }
@@ -605,10 +890,298 @@ namespace CircleMixRecord
             if (!_uiReady) return;
             if (CmbCameras.SelectedItem is DirectShowDevice dev)
             {
-                var fallback = _videoDevices.FirstOrDefault(d => !d.IsNvidiaBroadcast && !d.IsVirtual) ?? _videoDevices.Skip(1).FirstOrDefault();
+                var fallback = _videoDevices.FirstOrDefault(d => !d.IsStudioBroadcast && !d.IsVirtual) ?? _videoDevices.Skip(1).FirstOrDefault();
                 _engine.SwitchCamera(dev, fallback);
                 TxtStatusBanner.Text = $"Kamera bağlandı: {dev.FriendlyName}";
             }
+        }
+
+        private void CmbMicrophones_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_uiReady) return;
+            if (CmbMicrophones.SelectedItem is DirectShowDevice adev)
+            {
+                _engine.AudioEngine.PreferredMicName = adev.FriendlyName;
+                TxtStatusBanner.Text = $"🎙️ Aktif Stüdyo Mikrofonu: {adev.FriendlyName} (+{_engine.AudioEngine.MicGainBoostDb:0} dB • ses seviyesi kayıt sonunda otomatik dengelenir)";
+            }
+        }
+
+        private void WebcamStudioOptions_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!_uiReady) return;
+
+            if (CmbWebcamBgMode != null)
+                _engine.WebcamBgMode = Math.Max(0, CmbWebcamBgMode.SelectedIndex);
+
+            if (SldSubjectSharpness != null)
+            {
+                _engine.WebcamSubjectSharpness = SldSubjectSharpness.Value;
+                if (TxtSubjectSharpVal != null)
+                    TxtSubjectSharpVal.Text = $"%{(int)SldSubjectSharpness.Value}";
+            }
+
+            if (ChkStudioKeyLight != null)
+                _engine.WebcamStudioKeyLight = ChkStudioKeyLight.IsChecked == true;
+
+            if (SldWebcamZoom != null)
+            {
+                _engine.WebcamDigitalZoom = SldWebcamZoom.Value;
+                if (TxtWebcamZoomVal != null)
+                    TxtWebcamZoomVal.Text = $"{SldWebcamZoom.Value:0.00}x";
+            }
+
+            if (SldWebcamTiltY != null)
+            {
+                _engine.WebcamTiltY = SldWebcamTiltY.Value / 100.0;
+                if (TxtWebcamTiltVal != null)
+                    TxtWebcamTiltVal.Text = $"{(int)SldWebcamTiltY.Value:+#;-#;0}%";
+            }
+
+            if (SldWebcamPanX != null && SldWebcamRoll != null)
+            {
+                _engine.WebcamPanX = SldWebcamPanX.Value / 100.0;
+                _engine.WebcamRollDeg = SldWebcamRoll.Value;
+                if (TxtWebcamPanVal != null)
+                    TxtWebcamPanVal.Text = $"{(int)SldWebcamPanX.Value:+#;-#;0}% • {(int)SldWebcamRoll.Value:+#;-#;0}°";
+            }
+
+            if (CmbWebcamShape != null)
+                _engine.WebcamFrameShape = Math.Max(0, CmbWebcamShape.SelectedIndex);
+
+            if (CmbWebcamCorner != null)
+                _engine.WebcamCornerIndex = Math.Max(0, CmbWebcamCorner.SelectedIndex);
+
+            if (ChkWebcamAngleGuide != null)
+                _engine.ShowWebcamAngleGuide = ChkWebcamAngleGuide.IsChecked == true;
+        }
+
+        private void CmbCameraAnglePreset_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_uiReady || CmbCameraAnglePreset == null) return;
+            switch (CmbCameraAnglePreset.SelectedIndex)
+            {
+                case 0: // 🎯 Göz Hizası Eğitim Portresi (1.22x)
+                    SldWebcamZoom.Value = 1.22;
+                    SldWebcamTiltY.Value = -4;
+                    SldWebcamPanX.Value = 0;
+                    SldWebcamRoll.Value = 0;
+                    break;
+                case 1: // 📐 Geniş Stüdyo Açısı (1.00x)
+                    SldWebcamZoom.Value = 1.00;
+                    SldWebcamTiltY.Value = 0;
+                    SldWebcamPanX.Value = 0;
+                    SldWebcamRoll.Value = 0;
+                    break;
+                case 2: // 🔍 Circle Yakın Portre (1.50x)
+                    SldWebcamZoom.Value = 1.50;
+                    SldWebcamTiltY.Value = -6;
+                    SldWebcamPanX.Value = 0;
+                    break;
+                case 3: // ↗ Üstten Kamera Açısı Düzelt (Tilt -14%)
+                    SldWebcamZoom.Value = 1.28;
+                    SldWebcamTiltY.Value = -14;
+                    break;
+                case 4: // ↘ Alttan Kamera Açısı Düzelt (Tilt +14%)
+                    SldWebcamZoom.Value = 1.28;
+                    SldWebcamTiltY.Value = 14;
+                    break;
+            }
+            WebcamStudioOptions_Changed(sender, e);
+            TxtStatusBanner.Text = $"🎥 Kamera Açısı Ön Ayarı uygulandı: {(CmbCameraAnglePreset.SelectedItem as ComboBoxItem)?.Content}";
+        }
+
+        private void BtnCalibrateWebcamBg_Click(object sender, RoutedEventArgs e)
+        {
+            _engine.CalibrateWebcamBackgroundNow();
+            TxtStatusBanner.Text = "🎯 Arka Plan Tanıma kalibre edildi! AI portre maskesi yüz/omuz silüetinize kilitlendi ve netleme (%75 DSLR Focus) aktif.";
+        }
+
+        private void BtnPickWebcamBgImage_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Kamera Arka Plan Görseli Seç (Render veya Stüdyo Görseli)",
+                Filter = "Görsel Dosyaları (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp"
+            };
+            string defaultDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            if (!string.IsNullOrWhiteSpace(defaultDir) && Directory.Exists(defaultDir)) dlg.InitialDirectory = defaultDir;
+
+            if (dlg.ShowDialog() == true)
+            {
+                _engine.SetCustomWebcamBackground(dlg.FileName);
+                if (CmbWebcamBgMode != null) CmbWebcamBgMode.SelectedIndex = 5;
+                TxtStatusBanner.Text = $"🖼️ Kamera arka planı değiştirildi: {System.IO.Path.GetFileName(dlg.FileName)}";
+            }
+        }
+
+        private void MicAudioOptions_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!_uiReady) return;
+            if (SldMicGainDb != null)
+            {
+                _engine.AudioEngine.MicGainBoostDb = SldMicGainDb.Value;
+                if (TxtMicBoostVal != null)
+                    TxtMicBoostVal.Text = $"+{(int)SldMicGainDb.Value} dB (Stüdyo)";
+            }
+            if (ChkAutoVoiceBoost != null)
+                _engine.AudioEngine.AutoVoiceBoost = ChkAutoVoiceBoost.IsChecked == true;
+            if (ChkNoiseGate != null)
+                _engine.AudioEngine.NoiseGateEnabled = ChkNoiseGate.IsChecked == true;
+        }
+
+        private async void BtnTestMicVoice_Click(object sender, RoutedEventArgs e)
+        {
+            if (_engine.IsRecording)
+            {
+                TxtStatusBanner.Text = "Kayıt sırasındayken ses testi yerine canlı dB çubuğunu takip edebilirsiniz.";
+                return;
+            }
+
+            BtnTestMicVoice.IsEnabled = false;
+            string testDir = System.IO.Path.Combine(HardwareEncoderService.GetBaseStorageDir(), "Proje_Verileri", "_SesTesti");
+            Directory.CreateDirectory(testDir);
+            string testMicWav = System.IO.Path.Combine(testDir, "MicTest_Boosted.wav");
+            string testSysWav = System.IO.Path.Combine(testDir, "SysTest_Dummy.wav");
+
+            try
+            {
+                _engine.AudioEngine.StartRecordingToWav(testMicWav, testSysWav);
+                for (int s = 3; s >= 1; s--)
+                {
+                    BtnTestMicVoice.Content = $"🎙️ Konuşun... ({s} sn)";
+                    TxtStatusBanner.Text = $"🎙️ Mikrofon Ses Testi: Lütfen normal eğitim ses tonunuzla konuşun ({s} sn)... [+{_engine.AudioEngine.MicGainBoostDb:0} dB Boost Aktif]";
+                    await Task.Delay(1000);
+                }
+                _engine.AudioEngine.StopRecordingWav();
+
+                float maxPeak = _engine.AudioEngine.RecordedMicPeaks.Count > 0
+                    ? _engine.AudioEngine.RecordedMicPeaks.Max()
+                    : 0f;
+                double peakDb = maxPeak > 0.0001f ? 20.0 * Math.Log10(maxPeak) : -60.0;
+
+                BtnTestMicVoice.Content = "🔊 Kaydedilen Sesiniz Çalınıyor...";
+                TxtStatusBanner.Text = $"🔊 Sesiniz dinletiliyor! Yakalanan Tepe Seviye: {peakDb:0.0} dB (Circle & thezencirs Stüdyo Standardı)";
+
+                if (File.Exists(testMicWav))
+                {
+                    await Task.Run(() =>
+                    {
+                        try
+                        {
+                            using var player = new System.Media.SoundPlayer(testMicWav);
+                            player.PlaySync();
+                        }
+                        catch { }
+                    });
+                }
+
+                TxtStatusBanner.Text = $"✅ Ses Testi Tamamlandı (Tepe: {peakDb:0.0} dB). Sesiniz artık güçlü, tok ve net kaydediliyor!";
+            }
+            catch
+            {
+                TxtStatusBanner.Text = "Ses testi tamamlandı.";
+            }
+            finally
+            {
+                BtnTestMicVoice.Content = "🎙️ Sesimi Test Et (3 sn Kaydet & Dinle)";
+                BtnTestMicVoice.IsEnabled = true;
+            }
+        }
+
+        private void CmbCourseModule_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_uiReady || CmbCourseModule == null) return;
+            UpdateCoursePrompterUI(CmbCourseModule.SelectedIndex);
+        }
+
+        private void UpdateCoursePrompterUI(int moduleIdx)
+        {
+            if (TxtCoursePrompter == null || TxtCourseModuleHeader == null) return;
+
+            switch (moduleIdx)
+            {
+                case 0:
+                    TxtCourseModuleHeader.Text = "SAAT 1 (60 DK): AI MODELLEME & KURULUMLAR (3 YOL)";
+                    TxtCoursePrompter.Text =
+                        "⏱️ [00:00 - 15:00] BÖLÜM 1: ZORUNLU KURULUMLAR & SİSTEM HAZIRLIĞI\n" +
+                        "• Circle Studio & thezencirs çalışma ortamı + 3B modelleme köprüleri kurulumu\n" +
+                        "• Global Mimari Kurallar: Kutu kutu / çizgi film modelleme yasağı, gerçek cm/mm birim ve katman (Layer) standardı\n\n" +
+                        "🚀 [15:00 - 34:00] 1. YOL: OTONOM 3B CAD/BIM MİMARİ MODELLEME\n" +
+                        "• Mimari kat planlarını doğrudan okuyup gerçek ölçekte 3B kütle üretimi\n" +
+                        "• Duvar, 6.34m galeri boşluğu, U-dönüşlü uçan ceviz merdiven, tül/fon perde rayı, duvar çıtası ve gizli LED kanallarını otonom inşa ettirme\n\n" +
+                        "🪑 [34:00 - 48:00] 2. YOL: GÖRSELDEN / ESKİZDEN 3B MESH & MOBİLYA ÜRETİMİ\n" +
+                        "• Tek referans fotoğraftan özel tasarım berjer, organik sehpa ve banyo seramiği üretimi\n" +
+                        "• Sahneyi şişirmeden temiz dörtgen poligon (Quad Retopology) ile yerleştirme\n\n" +
+                        "⚡ [48:00 - 60:00] 3. YOL: HİBRİT PARAMETRİK AI MİMARİ ASİSTAN\n" +
+                        "• Yarım kalan projeleri bir mimar gözüyle tamamlatma, cephe fuga/silme otomasyonu ve temiz poligon optimizasyonu.";
+                    break;
+
+                case 1:
+                    TxtCourseModuleHeader.Text = "SAAT 2 (60 DK): AI FOTOGERÇEKÇİ RENDER & KURULUMLAR (3 YOL)";
+                    TxtCoursePrompter.Text =
+                        "⏱️ [00:00 - 12:00] BÖLÜM 1: RENDER MOTORU & KANAL KURULUMLARI\n" +
+                        "• Derinlik (ZDepth), Normal, Renk Maskesi (WireColor) ve Işık Karışımı kanallarının kurulumu\n" +
+                        "• Kamera Açısı & Lens Kuralları: 16mm-24mm Mimari Geniş Açı ve 2 Nokta Perspektif (Dikey Düzeltme)\n\n" +
+                        "💎 [12:00 - 30:00] 1. YOL: CIRCLE RENDER 2 AŞAMALI HİBRİT 1:1 MİMARİ RENDER AKIŞI\n" +
+                        "• 3B yazılımdan alınan 30 saniyelik ham kütleyi %0 geometri sapmasıyla (1:1 sadakat) dergi kalitesinde fotogerçekçi rendera dönüştürme\n" +
+                        "• Gündüz Güneşli, Altın Saat Günbatımı ve Mavi Saat Gece LED varyasyonları\n\n" +
+                        "🎛️ [30:00 - 46:00] 2. YOL: DERİNLİK & MASKE KİLİTLİ 8K PBR DOKU YÜKSELTME\n" +
+                        "• Derinlik ve malzeme maskeleriyle mermer damarlarını, keten tül perde geçirgenliğini ve honlanmış traverteni 4K/8K PBR netliğe yükseltme\n\n" +
+                        "☀️ [46:00 - 60:00] 3. YOL: GERÇEK ZAMANLI IŞIN İZLEME & AI DOKU İYİLEŞTİRME\n" +
+                        "• Müşteri yanında saniyeler içinde malzeme/ışık değiştirme, insan ve peyzaj dokularını gerçek fotoğraf kalitesine dönüştürme.";
+                    break;
+
+                case 2:
+                    TxtCourseModuleHeader.Text = "SAAT 3 (60 DK): AI SİNEMATİK ANİMASYON & 4K KURGU (2 YOL)";
+                    TxtCoursePrompter.Text =
+                        "⏱️ [00:00 - 12:00] BÖLÜM 1: SİNEMATİK ANİMASYON & CIRCLE STÜDYO KURULUMLARI\n" +
+                        "• Sinematik kamera fiziği (24mm sabit lens, erime/bozulma önleme kuralları)\n" +
+                        "• Circle Studio, GPU Donanım Kodlayıcı ve -14 LUFS Ses Mühendisliği kurulumu\n\n" +
+                        "🎬 [12:00 - 36:00] 1. YOL: İLK KARE -> SON KARE KİLİTLİ SİNEMATİK MİMARİ FİLM\n" +
+                        "• Başlangıç ve bitiş karelerini kilitleyerek binanın tasarımını hiç bozmadan sinematik dış ve iç mekan kamera yürüyüşü\n" +
+                        "• Rüzgarda hafif dalgalanan 6m tül perdeler, şömine alevi, su yansımaları ve yaşayan mekan senaryoları\n\n" +
+                        "🎥 [36:00 - 50:00] 2. YOL: 3B KAMERA YOLU & YAŞAYAN MEKAN KURGUSU\n" +
+                        "• 3B sahne kamera yolunu birebir koruyarak fotogerçekçi 60 FPS mimari film üretimi\n\n" +
+                        "🎵 [50:00 - 60:00] FİNAL: CIRCLE İLE 4K BEAT-SYNC KURGU & SUNUM STANDARDI\n" +
+                        "• 08.0s • 15.7s • 23.4s müzik vuruşlarına kilitli 4K UHD kurgu, 16:9 yatay + 9:16 dikey çift çıktı ve müşteri teslim standardı.";
+                    break;
+            }
+        }
+
+        private string GetCoursePackageDirectory()
+        {
+            // Uygulama klasörüne göreli (kişisel masaüstü yolu yok)
+            string dir = System.IO.Path.Combine(HardwareEncoderService.GetBaseStorageDir(), "Egitim_Seti");
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        private void BtnOpenCoursePackage_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string dir = GetCoursePackageDirectory();
+                Process.Start(new ProcessStartInfo { FileName = dir, UseShellExecute = true });
+                TxtStatusBanner.Text = $"🎓 1+1+1 Saatlik Circle & thezencirs Eğitim Seti klasörü açıldı: {dir}";
+            }
+            catch { }
+        }
+
+        private void BtnOpenCourseGuideHtml_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string htmlPath = System.IO.Path.Combine(GetCoursePackageDirectory(), "thezencirs_Circle_1_1_1_Egitim_Rehberi.html");
+                if (File.Exists(htmlPath))
+                {
+                    Process.Start(new ProcessStartInfo { FileName = htmlPath, UseShellExecute = true });
+                }
+                else
+                {
+                    BtnOpenCoursePackage_Click(sender, e);
+                }
+            }
+            catch { }
         }
 
         private void BtnRefreshDevices_Click(object sender, RoutedEventArgs e)
@@ -617,7 +1190,7 @@ namespace CircleMixRecord
             _videoDevices = vids;
             _audioDevices = auds;
             PopulateCameraCombo();
-            TxtStatusBanner.Text = $"{_videoDevices.Count} kamera ve {_audioDevices.Count} mikrofon algılandı (Varsayılan: NVIDIA Broadcast).";
+            TxtStatusBanner.Text = $"{_videoDevices.Count} kamera ve {_audioDevices.Count} mikrofon algılandı (Varsayılan: Circle Broadcast).";
         }
 
         private void SourceOptions_Changed(object sender, RoutedEventArgs e)
@@ -689,7 +1262,7 @@ namespace CircleMixRecord
 
                 // Kayıt bittiği anda otomatik olarak Kayıt ekranını kapatıp TAM CIRCLE EDIT KURGU EKRANINA geç!
                 SetStudioViewMode("Edit");
-                RefreshCapCutFolderLists();
+                RefreshCircleEditFolderLists();
 
                 string fileToPreview = File.Exists(proj.Horizontal16x9VideoPath)
                     ? proj.Horizontal16x9VideoPath
@@ -697,7 +1270,7 @@ namespace CircleMixRecord
 
                 if (!string.IsNullOrWhiteSpace(fileToPreview) && File.Exists(fileToPreview))
                 {
-                    LoadVideoIntoCapCutEditor(fileToPreview, isVertical: !File.Exists(proj.Horizontal16x9VideoPath), preserveCurrentProject: true);
+                    LoadVideoIntoCircleEditEditor(fileToPreview, isVertical: !File.Exists(proj.Horizontal16x9VideoPath), preserveCurrentProject: true);
                 }
                 RedrawTimeline();
 
@@ -716,7 +1289,7 @@ namespace CircleMixRecord
                 if (_activeStudioMode != "Record" && _activeStudioMode != "Meet")
                     SetStudioViewMode("Record");
 
-                var proj = _engine.StartDualRecording("DikeyReels", verticalOnly: true);
+                var proj = _engine.StartDualRecording("CircleDikey", verticalOnly: true);
                 _currentProject = proj;
                 BtnStartStopRec.Content = "⏹ Bitir & Kurgu";
                 BtnPauseRec.IsEnabled = true;
@@ -736,7 +1309,7 @@ namespace CircleMixRecord
             await _engine.StopDualRecordingAsync();
             var newProj = _engine.StartDualRecording("CircleDers_Part", verticalOnly: wasVertOnly);
             _currentProject = newProj;
-            RefreshCapCutFolderLists();
+            RefreshCircleEditFolderLists();
             TxtStatusBanner.Text = $"Yeni part aktif • {newProj.ProjectName}";
         }
 
@@ -758,9 +1331,10 @@ namespace CircleMixRecord
         private void BtnShowShortcuts_Click(object sender, RoutedEventArgs e)
         {
             string info =
-                "CIRCLE MIX RECORD — KISAYOLLAR & HAKKINDA\n" +
-                "by thezencirs (https://github.com/thezencirs)\n" +
-                "MIT License — Copyright (c) 2026 thezencirs\n" +
+                "CIRCLE STUDIO v1.1 — KISAYOLLAR & HAKKINDA\n" +
+                "by thezencirs\n" +
+                "Copyright © 2026 thezencirs. Tüm hakları saklıdır.\n" +
+                "Medya işleme altyapısında LGPL v3 lisanslı FFmpeg kullanılmaktadır.\n" +
                 "──────────────────────────────────────────────────────────\n\n" +
                 "STÜDYO & KAYIT:\n" +
                 "• Ctrl + Shift + R   İkili Kayıt Başlat / Bitir (16:9 + 9:16)\n" +
@@ -823,7 +1397,7 @@ namespace CircleMixRecord
         private void BtnTakeScreenshot_Click(object sender, RoutedEventArgs e)
         {
             var (p16, p9) = _engine.CaptureDualScreenshot();
-            RefreshCapCutFolderLists();
+            RefreshCircleEditFolderLists();
             TxtStatusBanner.Text = $"Fotoğraf kaydedildi • {System.IO.Path.GetFileName(p16)}";
         }
 
@@ -875,7 +1449,7 @@ namespace CircleMixRecord
             {
                 System.Windows.MessageBox.Show(
                     "Önce kısa bir kayıt alın veya 'Proje / Video Aç' butonundan bir video seçin.",
-                    "Circle Mix Record", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Circle Studio", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -887,8 +1461,8 @@ namespace CircleMixRecord
 
             if (!string.IsNullOrWhiteSpace(outFile) && File.Exists(outFile))
             {
-                RefreshCapCutFolderLists();
-                LoadVideoIntoCapCutEditor(outFile, isVertical: true, preserveCurrentProject: true);
+                RefreshCircleEditFolderLists();
+                LoadVideoIntoCircleEditEditor(outFile, isVertical: true, preserveCurrentProject: true);
                 TxtStatusBanner.Text = $"Kayıpsız Uncrop 9:16 dikey video üretildi: {outFile}";
                 System.Windows.MessageBox.Show(
                     $"Master kaynaktan kayıpsız Uncrop (%{SldUncrop.Value:0}) ile yeni 9:16 dikey video üretildi:\n\n{outFile}",
@@ -968,7 +1542,7 @@ namespace CircleMixRecord
                 $"• Kazanılan Süre: {saved:0.1f} sn (%{saved / total * 100.0:0} daha akıcı)";
         }
 
-        // ======================= SEKME 3: CAPCUT & INSTAGRAM EDITS KURGU, MEDYA, MASKELEME & ALTYAZI =======================
+        // ======================= SEKME 3: CIRCLE EDIT KURGU, MEDYA, MASKELEME & ALTYAZI =======================
 
         private void BtnAddMergeVideo_Click(object sender, RoutedEventArgs e)
         {
@@ -997,6 +1571,55 @@ namespace CircleMixRecord
             _currentProject.ExternalMergedVideoPaths.Clear();
             TxtMergedVideosStatus.Text = "Birleştirilecek ek video seçilmedi.";
             TxtStatusBanner.Text = "Video birleştirme listesi temizlendi.";
+        }
+
+        private async void BtnMergeAndExport4K_Click(object sender, RoutedEventArgs e)
+        {
+            await ExecuteNativeCircleMix4KMergeAsync(showDialogOnComplete: sender != null);
+        }
+
+        private async Task ExecuteNativeCircleMix4KMergeAsync(bool showDialogOnComplete)
+        {
+            if (_currentProject == null || _currentProject.ExternalMergedVideoPaths == null || _currentProject.ExternalMergedVideoPaths.Count == 0)
+            {
+                TxtStatusBanner.Text = "Birleştirilecek sahne bulunamadı. Lütfen '+ Video Ekle' ile sahneleri seçin.";
+                return;
+            }
+
+            if (BtnMergeAndExport4K != null) BtnMergeAndExport4K.IsEnabled = false;
+            var (out1080, out4K) = await TimelineRenderService.RenderMultiClipSlowMoMasterAsync(
+                _currentProject,
+                slowMoStretchFactor: 1.38,
+                xfadeDurationSec: 0.65,
+                onProgress: msg => Dispatcher.Invoke(() =>
+                {
+                    if (TxtStatusBanner != null) TxtStatusBanner.Text = msg;
+                    if (TxtMergedVideosStatus != null) TxtMergedVideosStatus.Text = msg;
+                }));
+            if (BtnMergeAndExport4K != null) BtnMergeAndExport4K.IsEnabled = true;
+
+            RefreshCircleEditFolderLists();
+            string bestTarget = !string.IsNullOrWhiteSpace(out4K) && File.Exists(out4K) ? out4K : out1080;
+            if (!string.IsNullOrWhiteSpace(bestTarget) && File.Exists(bestTarget))
+            {
+                bool isVertTarget = bestTarget.Contains("9x16", StringComparison.OrdinalIgnoreCase) || bestTarget.Contains("Dikey", StringComparison.OrdinalIgnoreCase);
+                if (isVertTarget) _lastExported9x16Path = bestTarget;
+                else _lastExported16x9Path = bestTarget;
+                LoadVideoIntoCircleEditEditor(bestTarget, isVertical: isVertTarget, preserveCurrentProject: true);
+                if (TxtMergedVideosStatus != null)
+                {
+                    TxtMergedVideosStatus.Text = $"✅ Circle Mix 4K UHD Slow-Mo Birleştirildi ({_currentProject.ExternalMergedVideoPaths.Count} Sahne • 60fps • -14 LUFS): " +
+                                                 System.IO.Path.GetFileName(bestTarget);
+                }
+                if (showDialogOnComplete)
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Circle Studio 4K UHD Slow-Mo Birleştirme Tamamlandı!\n\n4K UHD: {out4K}\n1080p: {out1080}",
+                        "Circle Studio — 4K Slow-Mo Master",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
         }
 
         private void BtnSelectPipMedia_Click(object sender, RoutedEventArgs e)
@@ -1079,7 +1702,95 @@ namespace CircleMixRecord
         private void ColorFilter_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (!_uiReady) return;
-            _currentProject.ColorFilter = (ColorLutPreset)Math.Clamp(CmbColorFilter.SelectedIndex, 0, 3);
+            _currentProject.ColorFilter = (ColorLutPreset)Math.Clamp(CmbColorFilter.SelectedIndex, 0, 14);
+            TxtStatusBanner.Text = $"🎨 Renk & LUT seçildi: {(CmbColorFilter.SelectedItem as ComboBoxItem)?.Content}";
+        }
+
+        private void ColorAdjustSliders_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (!_uiReady || _currentProject == null) return;
+            if (SldAdjBrightness != null) _currentProject.AdjustBrightness = SldAdjBrightness.Value;
+            if (SldAdjContrast != null) _currentProject.AdjustContrast = SldAdjContrast.Value;
+            if (SldAdjSaturation != null) _currentProject.AdjustSaturation = SldAdjSaturation.Value;
+            if (SldAdjWarmth != null) _currentProject.AdjustWarmth = SldAdjWarmth.Value;
+            if (SldAdjSharpen != null) _currentProject.AdjustSharpen = SldAdjSharpen.Value;
+            if (SldAdjVignette != null) _currentProject.AdjustVignette = SldAdjVignette.Value;
+
+            if (TxtAdjBrightContrastVal != null && SldAdjBrightness != null && SldAdjContrast != null)
+                TxtAdjBrightContrastVal.Text = $"{(int)SldAdjBrightness.Value:+#;-#;0} • {(int)SldAdjContrast.Value:+#;-#;0}";
+            if (TxtAdjSatWarmthVal != null && SldAdjSaturation != null && SldAdjWarmth != null)
+                TxtAdjSatWarmthVal.Text = $"{(int)SldAdjSaturation.Value:+#;-#;0} • {(int)SldAdjWarmth.Value:+#;-#;0}";
+            if (TxtAdjSharpVignetteVal != null && SldAdjSharpen != null && SldAdjVignette != null)
+                TxtAdjSharpVignetteVal.Text = $"%{(int)SldAdjSharpen.Value} • %{(int)SldAdjVignette.Value}";
+        }
+
+        private void BtnAutoColorAdjust_Click(object sender, RoutedEventArgs e)
+        {
+            if (SldAdjBrightness != null) SldAdjBrightness.Value = 4;
+            if (SldAdjContrast != null) SldAdjContrast.Value = 12;
+            if (SldAdjSaturation != null) SldAdjSaturation.Value = 10;
+            if (SldAdjWarmth != null) SldAdjWarmth.Value = 6;
+            if (SldAdjSharpen != null) SldAdjSharpen.Value = 35;
+            if (SldAdjVignette != null) SldAdjVignette.Value = 15;
+            TxtStatusBanner.Text = "✨ Otomatik Stüdyo Renk Dengelemesi uygulandı (Kontrast +12, Doygunluk +10, Sıcaklık +6, HDR Keskinlik %35).";
+        }
+
+        private void BtnResetColorAdjust_Click(object sender, RoutedEventArgs e)
+        {
+            if (CmbColorFilter != null) CmbColorFilter.SelectedIndex = 0;
+            if (SldAdjBrightness != null) SldAdjBrightness.Value = 0;
+            if (SldAdjContrast != null) SldAdjContrast.Value = 0;
+            if (SldAdjSaturation != null) SldAdjSaturation.Value = 0;
+            if (SldAdjWarmth != null) SldAdjWarmth.Value = 0;
+            if (SldAdjSharpen != null) SldAdjSharpen.Value = 0;
+            if (SldAdjVignette != null) SldAdjVignette.Value = 0;
+            TxtStatusBanner.Text = "Renk ve LUT ayarları doğal stüdyo değerlerine sıfırlandı.";
+        }
+
+        private void TransitionOptions_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!_uiReady || _currentProject == null) return;
+            if (CmbTransitionPreset != null)
+                _currentProject.TransitionPreset = (ClipTransitionPreset)Math.Clamp(CmbTransitionPreset.SelectedIndex, 0, 11);
+            if (SldTransitionDuration != null)
+            {
+                _currentProject.TransitionDurationSec = Math.Round(SldTransitionDuration.Value, 2);
+                if (TxtTransitionDurVal != null)
+                    TxtTransitionDurVal.Text = $"{_currentProject.TransitionDurationSec:0.00} sn";
+            }
+        }
+
+        private void CmbCaptionStyle_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_uiReady || _currentProject == null || CmbCaptionStyle == null) return;
+            _currentProject.CaptionStyle = (CaptionStylePreset)Math.Clamp(CmbCaptionStyle.SelectedIndex, 0, 3);
+            if (BdrLiveSubtitleOverlay != null)
+            {
+                switch (_currentProject.CaptionStyle)
+                {
+                    case CaptionStylePreset.OrangeKaraoke:
+                        BdrLiveSubtitleOverlay.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(235, 239, 95, 24));
+                        BdrLiveSubtitleOverlay.BorderBrush = System.Windows.Media.Brushes.White;
+                        BdrLiveSubtitleOverlay.VerticalAlignment = VerticalAlignment.Bottom;
+                        break;
+                    case CaptionStylePreset.MinimalCinema:
+                        BdrLiveSubtitleOverlay.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(90, 20, 14, 56));
+                        BdrLiveSubtitleOverlay.BorderBrush = System.Windows.Media.Brushes.Transparent;
+                        BdrLiveSubtitleOverlay.VerticalAlignment = VerticalAlignment.Bottom;
+                        break;
+                    case CaptionStylePreset.TopBanner:
+                        BdrLiveSubtitleOverlay.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(230, 38, 26, 102));
+                        BdrLiveSubtitleOverlay.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+                        BdrLiveSubtitleOverlay.VerticalAlignment = VerticalAlignment.Top;
+                        break;
+                    default:
+                        BdrLiveSubtitleOverlay.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(216, 20, 14, 56));
+                        BdrLiveSubtitleOverlay.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(52, 37, 128));
+                        BdrLiveSubtitleOverlay.VerticalAlignment = VerticalAlignment.Bottom;
+                        break;
+                }
+            }
+            UpdateLiveSubtitleOverlay();
         }
 
         private void BtnFitTargetDuration_Click(object sender, RoutedEventArgs e)
@@ -1193,7 +1904,7 @@ namespace CircleMixRecord
         private void UpdateLiveSubtitleOverlay()
         {
             if (BdrLiveSubtitleOverlay == null || TxtLiveSubtitleOverlay == null) return;
-            if (_currentProject?.Subtitles == null || _currentProject.Subtitles.Count == 0 || CapCutMediaPlayer.Visibility != Visibility.Visible)
+            if (_currentProject?.Subtitles == null || _currentProject.Subtitles.Count == 0 || CircleEditMediaPlayer.Visibility != Visibility.Visible)
             {
                 BdrLiveSubtitleOverlay.Visibility = Visibility.Collapsed;
                 return;
@@ -1237,7 +1948,7 @@ namespace CircleMixRecord
             {
                 System.Windows.MessageBox.Show(
                     "Dışa aktarmak için önce kısa bir kayıt alın veya '📂 Video Aç' butonundan bir video seçin.",
-                    "Circle Mix Record", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Circle Studio", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -1253,20 +1964,35 @@ namespace CircleMixRecord
             if (!string.IsNullOrWhiteSpace(out16)) _lastExported16x9Path = out16;
             if (!string.IsNullOrWhiteSpace(out9)) _lastExported9x16Path = out9;
 
+            string exportErr = TimelineRenderService.LastExportError;
+            if (!string.IsNullOrWhiteSpace(exportErr))
+            {
+                TxtStatusBanner.Text = "⚠️ Dışa aktarma başarısız oldu — kesilmemiş/yanlış video üretilmedi.";
+                System.Windows.MessageBox.Show(
+                    "Circle Edit dışa aktarma sırasında hata oluştu. Hatalı çıktı kaydedilmedi.\n\n" +
+                    (out16 != null ? $"✅ Circle Yatay (16:9): {out16}\n" : "") +
+                    (out9 != null ? $"✅ Circle Dikey (9:16): {out9}\n" : "") +
+                    $"\nHata ayrıntısı:\n{exportErr}",
+                    "Circle — Dışa Aktarma Hatası",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                if (out16 == null && out9 == null) return;
+            }
+
             SetStudioViewMode("Social");
 
             System.Windows.MessageBox.Show(
-                $"Sosyal Medya Kurgu Paketi Hazır!\n\n" +
-                $"📺 YouTube (16:9): {out16}\n" +
-                $"📱 Reels/Shorts (9:16): {out9}\n" +
+                $"Circle Kurgu Paketi Hazır!\n\n" +
+                $"📺 Circle Yatay (16:9): {out16 ?? "Üretilemedi"}\n" +
+                $"📱 Circle Dikey (9:16): {out9 ?? "Üretilemedi"}\n" +
                 $"📝 Altyazı (.SRT): {outSrt ?? "Yok"}\n\n" +
-                $"Şimdi sağdaki butonlardan tek tıkla YouTube, Instagram Reels, TikTok veya WhatsApp'a gönderebilirsiniz!",
-                "Circle Mix Record — Sosyal Medyaya Hazır",
+                $"Şimdi sağdaki butonlardan tek tıkla 16:9 veya 9:16 paketini klasörde seçili açıp paylaşabilirsiniz!",
+                "Circle — Paylaşıma Hazır",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
 
-        // ======================= SOSYAL MEDYAYA SAL (PAYLAŞIM MERKEZİ) =======================
+        // ======================= CIRCLE PAYLAŞIM MERKEZİ =======================
 
         private void RegenerateSocialMediaMetadata()
         {
@@ -1275,7 +2001,7 @@ namespace CircleMixRecord
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("🎓 Bu eğitim videosunda adım adım uygulamalı teknikleri, kısayolları ve profesyonel iş akışını inceledik.");
             sb.AppendLine();
-            sb.AppendLine("⏱️ BÖLÜMLER (YOUTUBE CHAPTERS):");
+            sb.AppendLine("⏱️ BÖLÜMLER (CIRCLE ZAMAN DAMGALARI):");
             sb.AppendLine("00:00 Giriş & Genel Bakış");
 
             double elapsedOut = 0.0;
@@ -1304,7 +2030,7 @@ namespace CircleMixRecord
             }
 
             sb.AppendLine();
-            sb.AppendLine("🔥 #mimarimodel #içmimarlık #3bmodelleme #tasarım #eğitim #render #keşfet #reels #shorts");
+            sb.AppendLine("🔥 #circle #thezencirs #mimarimodel #içmimarlık #3bmodelleme #tasarım #eğitim #render");
 
             TxtSocialCaption.Text = sb.ToString();
         }
@@ -1312,7 +2038,7 @@ namespace CircleMixRecord
         private void BtnRegenerateSocialMeta_Click(object sender, RoutedEventArgs e)
         {
             RegenerateSocialMediaMetadata();
-            TxtStatusBanner.Text = "Sosyal medya başlığı, YouTube bölüm zaman damgaları ve etiketler yenilendi.";
+            TxtStatusBanner.Text = "Paylaşım başlığı, Circle bölüm zaman damgaları ve etiketler yenilendi.";
         }
 
         private void BtnCopySocialText_Click(object sender, RoutedEventArgs e)
@@ -1321,44 +2047,40 @@ namespace CircleMixRecord
             {
                 string full = $"{TxtSocialTitle.Text}\n\n{TxtSocialCaption.Text}";
                 System.Windows.Clipboard.SetText(full);
-                TxtStatusBanner.Text = "Başlık, açıklama ve #hashtag'ler panoya kopyalandı (Ctrl+V ile yapıştırabilirsiniz).";
+                TxtStatusBanner.Text = "Başlık, açıklama ve etiketler panoya kopyalandı (Ctrl+V ile yapıştırabilirsiniz).";
             }
             catch { }
         }
 
-        private async void BtnShareYouTube_Click(object sender, RoutedEventArgs e)
+        private async void BtnShareWide16x9_Click(object sender, RoutedEventArgs e)
         {
-            await ShareToSocialPlatformAsync(
-                platformName: "YouTube Studio (16:9 Yatay + Chapters)",
-                uploadUrl: "https://studio.youtube.com/",
+            await ShareCirclePackageAsync(
+                packageName: "Circle 16:9 Geniş Ekran Paketi",
                 preferVertical9x16: false);
         }
 
-        private async void BtnShareInstagram_Click(object sender, RoutedEventArgs e)
+        private async void BtnShareVertical9x16_Click(object sender, RoutedEventArgs e)
         {
-            await ShareToSocialPlatformAsync(
-                platformName: "Instagram Reels (9:16 Dikey)",
-                uploadUrl: "https://www.instagram.com/",
+            await ShareCirclePackageAsync(
+                packageName: "Circle 9:16 Dikey Video Paketi",
                 preferVertical9x16: true);
         }
 
-        private async void BtnShareTikTok_Click(object sender, RoutedEventArgs e)
+        private async void BtnShareShort9x16_Click(object sender, RoutedEventArgs e)
         {
-            await ShareToSocialPlatformAsync(
-                platformName: "TikTok Studio (9:16 Dikey)",
-                uploadUrl: "https://www.tiktok.com/tiktokstudio/upload",
+            await ShareCirclePackageAsync(
+                packageName: "Circle 9:16 Kısa Klip Paketi",
                 preferVertical9x16: true);
         }
 
-        private async void BtnShareWhatsApp_Click(object sender, RoutedEventArgs e)
+        private async void BtnShareDirectDesktop_Click(object sender, RoutedEventArgs e)
         {
-            await ShareToSocialPlatformAsync(
-                platformName: "WhatsApp Web / Masaüstü",
-                uploadUrl: "https://web.whatsapp.com/",
+            await ShareCirclePackageAsync(
+                packageName: "Circle Masaüstü & Hızlı Paylaşım Paketi",
                 preferVertical9x16: true);
         }
 
-        private async Task ShareToSocialPlatformAsync(string platformName, string uploadUrl, bool preferVertical9x16)
+        private async Task ShareCirclePackageAsync(string packageName, bool preferVertical9x16)
         {
             // 1. Başlık ve açıklamayı otomatik panoya kopyala
             try
@@ -1383,6 +2105,13 @@ namespace CircleMixRecord
                     msg => Dispatcher.Invoke(() => TxtStatusBanner.Text = msg));
                 if (!string.IsNullOrWhiteSpace(out16)) _lastExported16x9Path = out16;
                 if (!string.IsNullOrWhiteSpace(out9)) _lastExported9x16Path = out9;
+                if (!string.IsNullOrWhiteSpace(TimelineRenderService.LastExportError))
+                {
+                    System.Windows.MessageBox.Show(
+                        "Kurgu dışa aktarılamadı; paylaşım iptal edildi.\n\n" + TimelineRenderService.LastExportError,
+                        "Circle — Dışa Aktarma Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
                 targetVideo = preferVertical9x16 ? _lastExported9x16Path : _lastExported16x9Path;
             }
 
@@ -1405,28 +2134,25 @@ namespace CircleMixRecord
                 BtnOpenFolder_Click(null, null);
             }
 
-            // 4. Platformun yükleme sayfasını aç
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = uploadUrl,
-                    UseShellExecute = true
-                });
-            }
-            catch { }
-
-            TxtStatusBanner.Text = $"🚀 {platformName} açıldı! Başlık & etiketler panoya kopyalandı (Ctrl+V), video dosyası klasörde seçildi.";
+            TxtStatusBanner.Text = $"🚀 {packageName} hazır! Başlık & bölüm damgaları panoya kopyalandı (Ctrl+V), video dosyası klasörde seçildi.";
         }
 
-        // ======================= SEKME 4: CANLI YAYIN (RTMP), CIRCLE MEET & ANYDESK KODLA BAĞLANTI =======================
+        // ======================= SEKME 4: CANLI YAYIN (RTMP), CIRCLE MEET & UZAKTAN KODLA BAĞLANTI =======================
 
         private void BtnCopyRoomCode_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                System.Windows.Clipboard.SetText(_meetServer.RoomCode);
-                TxtStatusBanner.Text = $"🔑 6 Haneli Bağlantı Kodunuz panoya kopyalandı: {_meetServer.RoomCode} — Arkadaşınıza bu kodu gönderebilirsiniz!";
+                if (_meetServer.IsRunning)
+                {
+                    System.Windows.Clipboard.SetText($"Circle Meet Oda Kodu: {_meetServer.RoomCode} • PIN: {_meetServer.RoomPin}");
+                    TxtStatusBanner.Text = $"🔑 Oda kodu ve PIN panoya kopyalandı: {_meetServer.RoomCode} • PIN {_meetServer.RoomPin}";
+                }
+                else
+                {
+                    System.Windows.Clipboard.SetText(_meetServer.RoomCode);
+                    TxtStatusBanner.Text = $"🔑 Oda kodu panoya kopyalandı: {_meetServer.RoomCode} — PIN, oda açıldığında oluşturulur.";
+                }
             }
             catch { }
         }
@@ -1435,10 +2161,10 @@ namespace CircleMixRecord
         {
             if (!_uiReady) return;
             bool allow = ChkAllowRemoteControl.IsChecked == true;
-            _meetServer.AllowRemoteControl = allow;
+            _meetServer.AllowRemoteControl = allow; // kapatıldığında tüm katılımcı onayları da geri alınır
             TxtStatusBanner.Text = allow
-                ? "🖱️ Circle Uzaktan Fare & Klavye Kontrolü AÇILDI. Bağlanan kişi ekranınızı yönetebilir."
-                : "🔒 Circle Uzaktan Fare & Klavye Kontrolü KAPATILDI (Sadece izleme ve kameralı toplantı aktif).";
+                ? "🖱️ Circle Uzaktan Kontrol açıldı. Katılımcılar istek gönderebilir; her istek için ayrıca onayınız sorulur."
+                : "🔒 Circle Uzaktan Fare & Klavye Kontrolü KAPATILDI ve verilen tüm izinler geri alındı.";
         }
 
         private async void BtnWelcomeConnectByCode_Click(object sender, RoutedEventArgs e)
@@ -1459,7 +2185,7 @@ namespace CircleMixRecord
             {
                 System.Windows.MessageBox.Show(
                     "Lütfen bağlanmak istediğiniz arkadaşınızın 6 haneli kodunu (Örn: 482-915) girin.",
-                    "Circle Mix Record — Kodla Bağlan", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Circle Studio — Kodla Bağlan", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -1491,28 +2217,33 @@ namespace CircleMixRecord
         {
             if (!_meetServer.IsRunning)
             {
-                string url = await _meetServer.StartServerAsync();
-                TxtMeetUrl.Text = url;
-                BtnToggleMeet.Content = "● Canlı Odayı Kapat";
-                BtnToggleMeet.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
-                TxtStatusBanner.Text = $"Circle Meet & Uzaktan Bağlantı Odası aktif (Kod: {_meetServer.RoomCode}): {url}";
+                await _meetServer.StartServerAsync();
+                UpdateMeetUiState();
+                TxtStatusBanner.Text = _meetServer.IsRunning
+                    ? $"Circle Meet & Uzaktan Bağlantı Odası aktif (Kod: {_meetServer.RoomCode} • PIN: {_meetServer.RoomPin}) — internet linki hazırlanıyor..."
+                    : "⚠️ Circle Meet odası başlatılamadı (5880 portu kullanımda olabilir).";
             }
             else
             {
                 await _meetServer.StopServerAsync();
-                BtnToggleMeet.Content = "● Canlı Odayı Aç";
-                BtnToggleMeet.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
-                TxtStatusBanner.Text = "Circle Meet Canlı Ders Sınıfı kapatıldı.";
+                if (ChkAllowRemoteControl != null) ChkAllowRemoteControl.IsChecked = false;
+                UpdateMeetUiState();
+                TxtStatusBanner.Text = "Circle Meet odası kapatıldı. Eski davet linkleri ve PIN artık geçersiz.";
             }
         }
 
         private void BtnOpenMeetBrowser_Click(object sender, RoutedEventArgs e)
         {
+            if (!_meetServer.IsRunning)
+            {
+                TxtStatusBanner.Text = "Önce 'Canlı Odayı Aç' ile odayı başlatın.";
+                return;
+            }
             try
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = TxtMeetUrl.Text,
+                    FileName = _meetServer.BestInviteUrl,
                     UseShellExecute = true
                 });
             }
@@ -1521,10 +2252,15 @@ namespace CircleMixRecord
 
         private void BtnCopyMeetLink_Click(object sender, RoutedEventArgs e)
         {
+            if (!_meetServer.IsRunning)
+            {
+                TxtStatusBanner.Text = "Önce 'Canlı Odayı Aç' ile odayı başlatın.";
+                return;
+            }
             try
             {
-                System.Windows.Clipboard.SetText(TxtMeetUrl.Text);
-                TxtStatusBanner.Text = $"Canlı sınıf davet linki panoya kopyalandı: {TxtMeetUrl.Text}";
+                System.Windows.Clipboard.SetText(_meetServer.BestInviteUrl);
+                TxtStatusBanner.Text = $"Davet linki panoya kopyalandı (link erişim anahtarı içerir, yalnızca güvendiğiniz kişilerle paylaşın) • PIN: {_meetServer.RoomPin}";
             }
             catch { }
         }
@@ -1551,29 +2287,151 @@ namespace CircleMixRecord
             }));
         }
 
-        private void BtnToggleRtmp_Click(object sender, RoutedEventArgs e)
+        // ======================= CIRCLE CANLI YAYIN (ÇOKLU KANAL) =======================
+        private StreamSettings _streamSettings;
+
+        private void LoadStreamSettingsIntoUi()
+        {
+            try
+            {
+                _streamSettings = StreamSettings.Load();
+                var d = _streamSettings.Destinations;
+                ChkDestStream1.IsChecked = d[0].Enabled; TxtDestStream1Url.Text = d[0].ServerUrl; PwdDestStream1.Password = d[0].Key;
+                ChkDestStream2.IsChecked = d[1].Enabled; TxtDestStream2Url.Text = d[1].ServerUrl; PwdDestStream2.Password = d[1].Key;
+                ChkDestStream3.IsChecked = d[2].Enabled; TxtDestStream3Url.Text = d[2].ServerUrl; PwdDestStream3.Password = d[2].Key;
+                ChkDestCustom.IsChecked = d[3].Enabled;  TxtDestCustomUrl.Text = d[3].ServerUrl;  PwdDestCustom.Password = d[3].Key;
+                CmbStreamOrientation.SelectedIndex = _streamSettings.Vertical ? 1 : 0;
+                CmbStreamResolution.SelectedIndex = _streamSettings.Height >= 1080 ? 0 : 1;
+                CmbStreamBitrate.SelectedIndex = _streamSettings.BitrateKbps switch { <= 3000 => 0, <= 4500 => 1, <= 6000 => 2, _ => 3 };
+                SldStreamMic.Value = _streamSettings.MicPercent;
+                SldStreamSys.Value = _streamSettings.DesktopPercent;
+                if (!string.IsNullOrWhiteSpace(_streamSettings.IntermissionImagePath))
+                    _engine.SetIntermissionImage(_streamSettings.IntermissionImagePath);
+            }
+            catch
+            {
+                _streamSettings = StreamSettings.CreateDefault();
+            }
+        }
+
+        private StreamSettings SaveStreamSettingsFromUi()
+        {
+            _streamSettings ??= StreamSettings.CreateDefault();
+            var d = _streamSettings.Destinations;
+            d[0].Enabled = ChkDestStream1.IsChecked == true; d[0].ServerUrl = TxtDestStream1Url.Text.Trim(); d[0].Key = PwdDestStream1.Password.Trim();
+            d[1].Enabled = ChkDestStream2.IsChecked == true; d[1].ServerUrl = TxtDestStream2Url.Text.Trim(); d[1].Key = PwdDestStream2.Password.Trim();
+            d[2].Enabled = ChkDestStream3.IsChecked == true; d[2].ServerUrl = TxtDestStream3Url.Text.Trim(); d[2].Key = PwdDestStream3.Password.Trim();
+            d[3].Enabled = ChkDestCustom.IsChecked == true;  d[3].ServerUrl = TxtDestCustomUrl.Text.Trim();  d[3].Key = PwdDestCustom.Password.Trim();
+            _streamSettings.Vertical = CmbStreamOrientation.SelectedIndex == 1;
+            _streamSettings.Height = CmbStreamResolution.SelectedIndex == 0 ? 1080 : 720;
+            _streamSettings.BitrateKbps = CmbStreamBitrate.SelectedIndex switch { 0 => 3000, 1 => 4500, 2 => 6000, _ => 8000 };
+            _streamSettings.MicPercent = (int)SldStreamMic.Value;
+            _streamSettings.DesktopPercent = (int)SldStreamSys.Value;
+            _streamSettings.Save();
+            return _streamSettings;
+        }
+
+        private void StreamMix_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtStreamMicVal != null && SldStreamMic != null) TxtStreamMicVal.Text = $"%{(int)SldStreamMic.Value}";
+            if (TxtStreamSysVal != null && SldStreamSys != null) TxtStreamSysVal.Text = $"%{(int)SldStreamSys.Value}";
+            var a = _engine?.ActiveStream?.Audio;
+            if (a != null)
+            {
+                a.MicGain = (float)(SldStreamMic.Value / 100.0);
+                a.SysGain = (float)(SldStreamSys.Value / 100.0);
+            }
+        }
+
+        private async void BtnToggleRtmp_Click(object sender, RoutedEventArgs e)
         {
             if (!_engine.IsStreamingRtmp)
             {
-                bool ok = _engine.StartRtmpBroadcast(TxtRtmpUrl.Text?.Trim());
-                if (ok)
+                var settings = SaveStreamSettingsFromUi();
+                if (!_engine.StartMultiStream(settings, out string err))
                 {
-                    BtnToggleRtmp.Content = "⏹️ RTMP Canlı Yayını Durdur";
-                    TxtStatusBanner.Text = $"RTMP Canlı Yayın başlatıldı: {TxtRtmpUrl.Text}";
+                    TxtStatusBanner.Text = "⚠️ Yayın başlatılamadı: " + err;
+                    TxtStreamStats.Text = "⚠️ " + err;
+                    return;
                 }
-                else
+                BtnToggleRtmp.Content = "■ Yayını Durdur";
+                BtnToggleRtmp.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
+                string names = string.Join(" + ", _engine.ActiveStream.DestinationNames);
+                TxtStatusBanner.Text = $"🔴 CANLI: {names} ({(settings.Vertical ? "9:16" : "16:9")} • {settings.Height}p • {settings.BitrateKbps} kbps) — bağlantı kuruluyor...";
+
+                // İlk 6 saniyede çöken yayını yakala (yanlış anahtar / sunucu)
+                await System.Threading.Tasks.Task.Delay(6000);
+                var st = _engine.ActiveStream;
+                if (_engine.IsStreamingRtmp && st != null && !st.IsAlive)
                 {
-                    TxtStatusBanner.Text = "RTMP sunucusuna bağlanılamadı. Lütfen yayın anahtarınızı kontrol edin.";
+                    string tail = st.LastError;
+                    if (string.IsNullOrWhiteSpace(tail)) tail = st.ErrorTail();
+                    _engine.StopRtmpBroadcast();
+                    ResetStreamButton();
+                    TxtStatusBanner.Text = "⚠️ Yayın sunucusu bağlantıyı reddetti. Anahtarı ve sunucu adresini kontrol edin.";
+                    TxtStreamStats.Text = "⚠️ " + (tail ?? "").Trim();
                 }
             }
             else
             {
                 _engine.StopRtmpBroadcast();
-                BtnToggleRtmp.Content = "📡 RTMP Canlı Yayını Başlat";
-                TxtStatusBanner.Text = "RTMP Canlı Yayın durduruldu.";
+                ResetStreamButton();
+                TxtStatusBanner.Text = "Canlı yayın durduruldu.";
             }
         }
 
+        private void ResetStreamButton()
+        {
+            BtnToggleRtmp.Content = "● Yayını Başlat";
+            BtnToggleRtmp.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+            TxtStreamStats.Text = "Yayın kapalı";
+        }
+
+        private void UpdateStreamStatsUi()
+        {
+            var st = _engine?.ActiveStream;
+            if (st == null || TxtStreamStats == null) return;
+            if (!st.IsAlive)
+            {
+                TxtStreamStats.Text = "⚠️ Yayın kesildi: " + (string.IsNullOrWhiteSpace(st.LastError) ? "bağlantı koptu" : st.LastError);
+                return;
+            }
+            string up = st.Uptime.ToString(@"hh\:mm\:ss");
+            string warn = string.IsNullOrWhiteSpace(st.LastError) ? "" : "\n⚠️ " + st.LastError;
+            TxtStreamStats.Text = $"🔴 CANLI {up} • {string.Join(" + ", st.DestinationNames)}\n{st.LastStats}{warn}";
+        }
+
+        private void BtnToggleIntermission_Click(object sender, RoutedEventArgs e) => ToggleIntermission();
+
+        private void ToggleIntermission()
+        {
+            _engine.IntermissionActive = !_engine.IntermissionActive;
+            if (BtnToggleIntermission != null)
+            {
+                BtnToggleIntermission.Content = _engine.IntermissionActive ? "▶ Yayına Dön (Alt+Shift+B)" : "⏸ Bekleme Ekranı (Alt+Shift+B)";
+                BtnToggleIntermission.Background = _engine.IntermissionActive
+                    ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24))
+                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
+            }
+            TxtStatusBanner.Text = _engine.IntermissionActive ? "⏸ Bekleme ekranı yayında (ekranınız gizlendi)." : "▶ Ekran paylaşımına dönüldü.";
+        }
+
+        private void BtnPickIntermissionImage_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Bekleme / Ara Ekranı Görseli Seç",
+                Filter = "Görseller|*.png;*.jpg;*.jpeg;*.bmp;*.webp"
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                _engine.SetIntermissionImage(dlg.FileName);
+                _streamSettings ??= StreamSettings.CreateDefault();
+                _streamSettings.IntermissionImagePath = dlg.FileName;
+                _streamSettings.Save();
+                TxtStatusBanner.Text = $"Bekleme görseli ayarlandı: {System.IO.Path.GetFileName(dlg.FileName)}";
+            }
+        }
         // ======================= PROJE, YATAY / DİKEY KLASÖRLER & SÜRÜKLE-BIRAK CIRCLE EDIT STÜDYOSU =======================
 
         private sealed class FolderMediaItem
@@ -1584,7 +2442,7 @@ namespace CircleMixRecord
             public override string ToString() => DisplayText;
         }
 
-        private void RefreshCapCutFolderLists()
+        private void RefreshCircleEditFolderLists()
         {
             if (LstHorizFolderFiles == null || LstVertFolderFiles == null) return;
 
@@ -1632,9 +2490,9 @@ namespace CircleMixRecord
             catch { }
         }
 
-        private void BtnRefreshCapCutFolders_Click(object sender, RoutedEventArgs e)
+        private void BtnRefreshCircleEditFolders_Click(object sender, RoutedEventArgs e)
         {
-            RefreshCapCutFolderLists();
+            RefreshCircleEditFolderLists();
             TxtStatusBanner.Text = "Medya listesi yenilendi";
         }
 
@@ -1650,19 +2508,19 @@ namespace CircleMixRecord
             Process.Start(new ProcessStartInfo { FileName = dir, UseShellExecute = true });
         }
 
-        private void BtnCapCutNewBlank_Click(object sender, RoutedEventArgs e)
+        private void BtnCircleEditNewBlank_Click(object sender, RoutedEventArgs e)
         {
-            PauseCapCutPlayer();
-            CapCutMediaPlayer.Source = null;
-            CapCutMediaPlayer.Visibility = Visibility.Collapsed;
-            BdrCapCutSpeedBadge.Visibility = Visibility.Collapsed;
-            BdrCapCutEmptyState.Visibility = Visibility.Visible;
-            _activeCapCutVideoPath = "";
+            PauseCircleEditPlayer();
+            CircleEditMediaPlayer.Source = null;
+            CircleEditMediaPlayer.Visibility = Visibility.Collapsed;
+            BdrCircleEditSpeedBadge.Visibility = Visibility.Collapsed;
+            BdrCircleEditEmptyState.Visibility = Visibility.Visible;
+            _activeCircleEditVideoPath = "";
             _activeTimelapseSpeed = 1.0;
             _undoStack.Clear();
 
             InitializeStarterTimelineProject();
-            TxtCapCutActiveFile.Text = "Video seçin veya sürükleyin";
+            TxtCircleEditActiveFile.Text = "Video seçin veya sürükleyin";
             TxtStatusBanner.Text = "Tuval temizlendi";
             RedrawTimeline();
         }
@@ -1686,7 +2544,7 @@ namespace CircleMixRecord
         {
             if (LstHorizFolderFiles.SelectedItem is FolderMediaItem item && File.Exists(item.FilePath))
             {
-                LoadVideoIntoCapCutEditor(item.FilePath, isVertical: false, preserveCurrentProject: false);
+                LoadVideoIntoCircleEditEditor(item.FilePath, isVertical: false, preserveCurrentProject: false);
             }
         }
 
@@ -1694,7 +2552,7 @@ namespace CircleMixRecord
         {
             if (LstVertFolderFiles.SelectedItem is FolderMediaItem item && File.Exists(item.FilePath))
             {
-                LoadVideoIntoCapCutEditor(item.FilePath, isVertical: true, preserveCurrentProject: false);
+                LoadVideoIntoCircleEditEditor(item.FilePath, isVertical: true, preserveCurrentProject: false);
             }
         }
 
@@ -1702,8 +2560,8 @@ namespace CircleMixRecord
         {
             if (LstHorizFolderFiles.SelectedItem is FolderMediaItem item && File.Exists(item.FilePath))
             {
-                LoadVideoIntoCapCutEditor(item.FilePath, isVertical: false, preserveCurrentProject: false);
-                PlayCapCutPlayer();
+                LoadVideoIntoCircleEditEditor(item.FilePath, isVertical: false, preserveCurrentProject: false);
+                PlayCircleEditPlayer();
             }
         }
 
@@ -1711,8 +2569,8 @@ namespace CircleMixRecord
         {
             if (LstVertFolderFiles.SelectedItem is FolderMediaItem item && File.Exists(item.FilePath))
             {
-                LoadVideoIntoCapCutEditor(item.FilePath, isVertical: true, preserveCurrentProject: false);
-                PlayCapCutPlayer();
+                LoadVideoIntoCircleEditEditor(item.FilePath, isVertical: true, preserveCurrentProject: false);
+                PlayCircleEditPlayer();
             }
         }
 
@@ -1738,7 +2596,7 @@ namespace CircleMixRecord
             }
         }
 
-        private void CapCutDropZone_DragOver(object sender, System.Windows.DragEventArgs e)
+        private void CircleEditDropZone_DragOver(object sender, System.Windows.DragEventArgs e)
         {
             if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
@@ -1751,7 +2609,7 @@ namespace CircleMixRecord
             e.Handled = true;
         }
 
-        private void CapCutDropZone_Drop(object sender, System.Windows.DragEventArgs e)
+        private void CircleEditDropZone_Drop(object sender, System.Windows.DragEventArgs e)
         {
             if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
@@ -1791,31 +2649,31 @@ namespace CircleMixRecord
                 else if (ext == ".mp4" || ext == ".mkv" || ext == ".mov" || ext == ".avi" || ext == ".webm")
                 {
                     bool isVert = file.Contains("Dikey", StringComparison.OrdinalIgnoreCase) || file.Contains("9x16", StringComparison.OrdinalIgnoreCase);
-                    if (string.IsNullOrWhiteSpace(_activeCapCutVideoPath))
+                    if (string.IsNullOrWhiteSpace(_activeCircleEditVideoPath))
                     {
-                        LoadVideoIntoCapCutEditor(file, isVert, preserveCurrentProject: false);
+                        LoadVideoIntoCircleEditEditor(file, isVert, preserveCurrentProject: false);
                     }
-                    else if (!string.Equals(_activeCapCutVideoPath, file, StringComparison.OrdinalIgnoreCase))
+                    else if (!string.Equals(_activeCircleEditVideoPath, file, StringComparison.OrdinalIgnoreCase))
                     {
                         // Halihazırda açık bir video varsa hem oynatıcıya yükle hem de birleştirme listesine ekle
-                        LoadVideoIntoCapCutEditor(file, isVert, preserveCurrentProject: false);
+                        LoadVideoIntoCircleEditEditor(file, isVert, preserveCurrentProject: false);
                     }
                 }
             }
         }
 
-        private void LoadVideoIntoCapCutEditor(string videoPath, bool isVertical, bool preserveCurrentProject)
+        private void LoadVideoIntoCircleEditEditor(string videoPath, bool isVertical, bool preserveCurrentProject)
         {
             if (string.IsNullOrWhiteSpace(videoPath) || !File.Exists(videoPath)) return;
 
-            _activeCapCutVideoPath = videoPath;
-            _isCapCutShowingVertical = isVertical;
-            TxtCapCutActiveFile.Text = $"{System.IO.Path.GetFileName(videoPath)} ({(isVertical ? "9:16 Dikey" : "16:9 Yatay")})";
+            _activeCircleEditVideoPath = videoPath;
+            _isCircleEditShowingVertical = isVertical;
+            TxtCircleEditActiveFile.Text = $"{System.IO.Path.GetFileName(videoPath)} ({(isVertical ? "9:16 Dikey" : "16:9 Yatay")})";
 
             var activeBtnBg = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
             var idleBtnBg = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
-            if (BtnCapCutView16x9 != null) BtnCapCutView16x9.Background = !isVertical ? activeBtnBg : idleBtnBg;
-            if (BtnCapCutView9x16 != null) BtnCapCutView9x16.Background = isVertical ? activeBtnBg : idleBtnBg;
+            if (BtnCircleEditView16x9 != null) BtnCircleEditView16x9.Background = !isVertical ? activeBtnBg : idleBtnBg;
+            if (BtnCircleEditView9x16 != null) BtnCircleEditView9x16.Background = isVertical ? activeBtnBg : idleBtnBg;
 
             if (!preserveCurrentProject)
             {
@@ -1828,20 +2686,20 @@ namespace CircleMixRecord
                 {
                     string hMatch = System.IO.Path.Combine(
                         HardwareEncoderService.GetHorizontalRecordingsDir(),
-                        baseName.Replace("_Dikey_Reels_9x16", "_Yatay_16x9") + ".mp4");
+                        baseName.Replace("_Dikey_9x16", "_Yatay_16x9") + ".mp4");
                     if (File.Exists(hMatch)) horizCandidate = hMatch;
                 }
                 else
                 {
                     string vMatch = System.IO.Path.Combine(
                         HardwareEncoderService.GetVerticalRecordingsDir(),
-                        baseName.Replace("_Yatay_16x9", "_Dikey_Reels_9x16") + ".mp4");
+                        baseName.Replace("_Yatay_16x9", "_Dikey_9x16") + ".mp4");
                     if (File.Exists(vMatch)) vertCandidate = vMatch;
                 }
 
                 _currentProject = new CmrProject
                 {
-                    ProjectName = baseName.Replace("_Yatay_16x9", "").Replace("_Dikey_Reels_9x16", ""),
+                    ProjectName = baseName.Replace("_Yatay_16x9", "").Replace("_Dikey_9x16", ""),
                     ProjectDirectory = HardwareEncoderService.GetBaseStorageDir(),
                     MasterCleanVideoPath = horizCandidate,
                     Horizontal16x9VideoPath = horizCandidate,
@@ -1851,16 +2709,16 @@ namespace CircleMixRecord
                 _undoStack.Clear();
             }
 
-            BdrCapCutEmptyState.Visibility = Visibility.Collapsed;
-            CapCutMediaPlayer.Visibility = Visibility.Visible;
-            BdrCapCutSpeedBadge.Visibility = Visibility.Visible;
+            BdrCircleEditEmptyState.Visibility = Visibility.Collapsed;
+            CircleEditMediaPlayer.Visibility = Visibility.Visible;
+            BdrCircleEditSpeedBadge.Visibility = Visibility.Visible;
 
             try
             {
-                CapCutMediaPlayer.Stop();
-                CapCutMediaPlayer.Source = new Uri(videoPath, UriKind.Absolute);
-                CapCutMediaPlayer.SpeedRatio = Math.Clamp(_activeTimelapseSpeed, 0.25, 8.0);
-                CapCutMediaPlayer.Play();
+                CircleEditMediaPlayer.Stop();
+                CircleEditMediaPlayer.Source = new Uri(videoPath, UriKind.Absolute);
+                CircleEditMediaPlayer.SpeedRatio = Math.Clamp(_activeTimelapseSpeed, 0.25, 8.0);
+                CircleEditMediaPlayer.Play();
                 _isPlayerPlaying = true;
                 UpdatePlayPauseButtonLabels();
             }
@@ -1869,11 +2727,11 @@ namespace CircleMixRecord
             TxtStatusBanner.Text = $"🎬 Circle Edit Kurguya Yüklendi: {System.IO.Path.GetFileName(videoPath)} — Space ile Oynat/Duraklat, S ile Kes, Del ile Sil, 2x-30x ile Timelapse yapın.";
         }
 
-        private void CapCutMediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
+        private void CircleEditMediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
         {
-            if (CapCutMediaPlayer.NaturalDuration.HasTimeSpan)
+            if (CircleEditMediaPlayer.NaturalDuration.HasTimeSpan)
             {
-                double realDur = Math.Max(0.5, CapCutMediaPlayer.NaturalDuration.TimeSpan.TotalSeconds);
+                double realDur = Math.Max(0.5, CircleEditMediaPlayer.NaturalDuration.TimeSpan.TotalSeconds);
                 _currentProject.TotalDurationSec = realDur;
 
                 if (_currentProject.Clips.Count == 0 ||
@@ -1882,7 +2740,7 @@ namespace CircleMixRecord
                     _currentProject.Clips.Clear();
                     _currentProject.Clips.Add(new TimelineClip
                     {
-                        Label = System.IO.Path.GetFileNameWithoutExtension(_activeCapCutVideoPath),
+                        Label = System.IO.Path.GetFileNameWithoutExtension(_activeCircleEditVideoPath),
                         SourceStartSec = 0.0,
                         SourceEndSec = Math.Round(realDur, 2),
                         SpeedMultiplier = _activeTimelapseSpeed,
@@ -1893,7 +2751,7 @@ namespace CircleMixRecord
                     // Harici MP4 veya video yüklendiyse FFmpeg PCM üzerinden %100 gerçek ses dalga formunu çıkar
                     if (_currentProject.WaveformPeaks == null || _currentProject.WaveformPeaks.Count == 0)
                     {
-                        string activePath = _activeCapCutVideoPath;
+                        string activePath = _activeCircleEditVideoPath;
                         _ = Task.Run(() =>
                         {
                             var realPeaks = AutoCutSilenceService.ExtractRealWaveformPeaks(activePath, out _, 480);
@@ -1920,36 +2778,36 @@ namespace CircleMixRecord
             }
         }
 
-        private void CapCutMediaPlayer_MediaEnded(object sender, RoutedEventArgs e)
+        private void CircleEditMediaPlayer_MediaEnded(object sender, RoutedEventArgs e)
         {
-            CapCutMediaPlayer.Position = TimeSpan.Zero;
+            CircleEditMediaPlayer.Position = TimeSpan.Zero;
             _playheadSec = 0.0;
-            PauseCapCutPlayer();
+            PauseCircleEditPlayer();
             RedrawTimeline();
         }
 
-        private void CapCutMediaPlayer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void CircleEditMediaPlayer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             BtnPlayerPlayPause_Click(sender, e);
         }
 
-        private void PlayCapCutPlayer()
+        private void PlayCircleEditPlayer()
         {
-            if (CapCutMediaPlayer.Source == null) return;
+            if (CircleEditMediaPlayer.Source == null) return;
             try
             {
-                CapCutMediaPlayer.Play();
+                CircleEditMediaPlayer.Play();
                 _isPlayerPlaying = true;
                 UpdatePlayPauseButtonLabels();
             }
             catch { }
         }
 
-        private void PauseCapCutPlayer()
+        private void PauseCircleEditPlayer()
         {
             try
             {
-                CapCutMediaPlayer.Pause();
+                CircleEditMediaPlayer.Pause();
             }
             catch { }
             _isPlayerPlaying = false;
@@ -1965,17 +2823,17 @@ namespace CircleMixRecord
 
         private void BtnPlayerPlayPause_Click(object sender, RoutedEventArgs e)
         {
-            if (CapCutMediaPlayer.Source == null)
+            if (CircleEditMediaPlayer.Source == null)
             {
                 // Oynatıcı boşsa Yatay veya Dikey klasördeki en son videoyu otomatik yükle
                 if (LstHorizFolderFiles.Items.Count > 0 && LstHorizFolderFiles.Items[0] is FolderMediaItem hItem)
                 {
-                    LoadVideoIntoCapCutEditor(hItem.FilePath, isVertical: false, preserveCurrentProject: false);
+                    LoadVideoIntoCircleEditEditor(hItem.FilePath, isVertical: false, preserveCurrentProject: false);
                     return;
                 }
                 if (LstVertFolderFiles.Items.Count > 0 && LstVertFolderFiles.Items[0] is FolderMediaItem vItem)
                 {
-                    LoadVideoIntoCapCutEditor(vItem.FilePath, isVertical: true, preserveCurrentProject: false);
+                    LoadVideoIntoCircleEditEditor(vItem.FilePath, isVertical: true, preserveCurrentProject: false);
                     return;
                 }
                 TxtStatusBanner.Text = "Soldaki medya listesinden bir video seçin veya yeni kayıt alın";
@@ -1983,35 +2841,35 @@ namespace CircleMixRecord
             }
 
             if (_isPlayerPlaying)
-                PauseCapCutPlayer();
+                PauseCircleEditPlayer();
             else
-                PlayCapCutPlayer();
+                PlayCircleEditPlayer();
         }
 
         private void BtnPlayerStart_Click(object sender, RoutedEventArgs e)
         {
-            SeekCapCutPlayer(0.0);
+            SeekCircleEditPlayer(0.0);
         }
 
         private void BtnPlayerBack_Click(object sender, RoutedEventArgs e)
         {
-            SeekCapCutPlayer(Math.Max(0.0, _playheadSec - 3.0));
+            SeekCircleEditPlayer(Math.Max(0.0, _playheadSec - 3.0));
         }
 
         private void BtnPlayerForward_Click(object sender, RoutedEventArgs e)
         {
             double maxDur = Math.Max(1.0, _currentProject?.TotalDurationSec ?? 10.0);
-            SeekCapCutPlayer(Math.Min(maxDur, _playheadSec + 3.0));
+            SeekCircleEditPlayer(Math.Min(maxDur, _playheadSec + 3.0));
         }
 
-        private void SeekCapCutPlayer(double targetSec)
+        private void SeekCircleEditPlayer(double targetSec)
         {
             _playheadSec = Math.Max(0.0, targetSec);
-            if (CapCutMediaPlayer.Source != null)
+            if (CircleEditMediaPlayer.Source != null)
             {
                 try
                 {
-                    CapCutMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec);
+                    CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec);
                 }
                 catch { }
             }
@@ -2023,43 +2881,309 @@ namespace CircleMixRecord
         private void BtnTogglePlayerMute_Click(object sender, RoutedEventArgs e)
         {
             _isPlayerMuted = !_isPlayerMuted;
-            CapCutMediaPlayer.IsMuted = _isPlayerMuted;
+            CircleEditMediaPlayer.IsMuted = _isPlayerMuted;
             if (BtnTogglePlayerMute != null)
             {
                 BtnTogglePlayerMute.Content = _isPlayerMuted ? "Ses: Kapalı" : "Ses";
             }
         }
 
-        private void BtnCapCutSwitch16x9_Click(object sender, RoutedEventArgs e)
+        private void BtnCircleEditSwitch16x9_Click(object sender, RoutedEventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(_currentProject?.Horizontal16x9VideoPath) && File.Exists(_currentProject.Horizontal16x9VideoPath))
             {
-                LoadVideoIntoCapCutEditor(_currentProject.Horizontal16x9VideoPath, isVertical: false, preserveCurrentProject: true);
+                LoadVideoIntoCircleEditEditor(_currentProject.Horizontal16x9VideoPath, isVertical: false, preserveCurrentProject: true);
             }
             else if (LstHorizFolderFiles.Items.Count > 0 && LstHorizFolderFiles.Items[0] is FolderMediaItem item)
             {
-                LoadVideoIntoCapCutEditor(item.FilePath, isVertical: false, preserveCurrentProject: false);
+                LoadVideoIntoCircleEditEditor(item.FilePath, isVertical: false, preserveCurrentProject: false);
             }
         }
 
-        private void BtnCapCutSwitch9x16_Click(object sender, RoutedEventArgs e)
+        private void BtnCircleEditSwitch9x16_Click(object sender, RoutedEventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(_currentProject?.Vertical9x16VideoPath) && File.Exists(_currentProject.Vertical9x16VideoPath))
             {
-                LoadVideoIntoCapCutEditor(_currentProject.Vertical9x16VideoPath, isVertical: true, preserveCurrentProject: true);
+                LoadVideoIntoCircleEditEditor(_currentProject.Vertical9x16VideoPath, isVertical: true, preserveCurrentProject: true);
             }
             else if (LstVertFolderFiles.Items.Count > 0 && LstVertFolderFiles.Items[0] is FolderMediaItem item)
             {
-                LoadVideoIntoCapCutEditor(item.FilePath, isVertical: true, preserveCurrentProject: false);
+                LoadVideoIntoCircleEditEditor(item.FilePath, isVertical: true, preserveCurrentProject: false);
             }
         }
 
         // ======================= TIMELAPSE (HIZLANDIRMA: 0.5x - 30x) & 60 FPS TIMELAPSE KAYDET =======================
 
+        private bool _isRecordingVoiceover = false;
+        private string _activeVoiceoverWavPath = "";
+        private bool _syncingSpeedCurveCombos = false;
+
+        private void CmbQuickSpeedCurve_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_uiReady || _syncingSpeedCurveCombos || CmbQuickSpeedCurve == null) return;
+            _syncingSpeedCurveCombos = true;
+            if (CmbSpeedCurvePreset != null)
+                CmbSpeedCurvePreset.SelectedIndex = CmbQuickSpeedCurve.SelectedIndex;
+            _syncingSpeedCurveCombos = false;
+            ApplySelectedSpeedCurveMode(CmbQuickSpeedCurve.SelectedIndex, applyToTimelineImmediately: true);
+        }
+
+        private void CmbSpeedCurvePreset_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_uiReady || _syncingSpeedCurveCombos || CmbSpeedCurvePreset == null) return;
+            _syncingSpeedCurveCombos = true;
+            if (CmbQuickSpeedCurve != null)
+                CmbQuickSpeedCurve.SelectedIndex = CmbSpeedCurvePreset.SelectedIndex;
+            _syncingSpeedCurveCombos = false;
+            ApplySelectedSpeedCurveMode(CmbSpeedCurvePreset.SelectedIndex, applyToTimelineImmediately: false);
+        }
+
+        private void ApplySelectedSpeedCurveMode(int presetIdx, bool applyToTimelineImmediately)
+        {
+            var preset = (SpeedCurvePreset)Math.Clamp(presetIdx, 0, 8);
+            if (_currentProject != null)
+                _currentProject.ActiveSpeedCurve = preset;
+
+            var pts = SpeedCurveCatalog.GetPresetPoints(preset, _activeTimelapseSpeed);
+            double minSpd = pts.Min(p => p.Speed);
+            double maxSpd = pts.Max(p => p.Speed);
+
+            if (TxtSpeedCurvePeakInfo != null)
+            {
+                TxtSpeedCurvePeakInfo.Text = preset == SpeedCurvePreset.Constant
+                    ? $"{_activeTimelapseSpeed:0.#}x Sabit"
+                    : $"{minSpd:0.#}x ➔ {maxSpd:0.#}x";
+            }
+
+            if (TxtCircleEditSpeedBadge != null)
+            {
+                TxtCircleEditSpeedBadge.Text = preset == SpeedCurvePreset.Constant
+                    ? $"{_activeTimelapseSpeed:0.#}x"
+                    : $"⚡ {preset}";
+            }
+
+            RedrawSpeedCurveCanvas();
+
+            if (applyToTimelineImmediately && _currentProject != null && _currentProject.Clips.Count > 0)
+            {
+                PushUndoSnapshot();
+                TimelineRenderService.ApplySpeedCurveToTimelineClip(_currentProject, _selectedClipIndex, preset, _activeTimelapseSpeed);
+                RedrawTimeline();
+                TxtStatusBanner.Text = preset == SpeedCurvePreset.Constant
+                    ? $"Sabit hız seçildi ({_activeTimelapseSpeed:0.#}x)."
+                    : $"⚡ '{preset}' dinamik hız eğrisi ({minSpd:0.#}x ➔ {maxSpd:0.#}x) Timeline üzerine uygulandı!";
+            }
+        }
+
+        private void BtnApplySpeedCurveToTimeline_Click(object sender, RoutedEventArgs e)
+        {
+            int idx = CmbSpeedCurvePreset?.SelectedIndex ?? 0;
+            ApplySelectedSpeedCurveMode(idx, applyToTimelineImmediately: true);
+        }
+
+        private void SpeedCurveCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RedrawSpeedCurveCanvas();
+
+        private void RedrawSpeedCurveCanvas()
+        {
+            if (SpeedCurveCanvas == null || SpeedCurveCanvas.ActualWidth < 20 || SpeedCurveCanvas.ActualHeight < 16)
+                return;
+
+            SpeedCurveCanvas.Children.Clear();
+            double w = SpeedCurveCanvas.ActualWidth;
+            double h = SpeedCurveCanvas.ActualHeight;
+
+            // Orta referans çizgisi (1.0x normal hız)
+            var refLine = new Line
+            {
+                X1 = 0,
+                X2 = w,
+                Y1 = h * 0.72,
+                Y2 = h * 0.72,
+                Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(52, 37, 128)),
+                StrokeThickness = 1,
+                StrokeDashArray = new DoubleCollection { 3, 3 }
+            };
+            SpeedCurveCanvas.Children.Add(refLine);
+
+            var preset = _currentProject?.ActiveSpeedCurve ?? SpeedCurvePreset.Constant;
+            var pts = SpeedCurveCatalog.GetPresetPoints(preset, _activeTimelapseSpeed);
+            if (pts.Count < 2) return;
+
+            var poly = new Polyline
+            {
+                Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                StrokeThickness = 2.2
+            };
+
+            foreach (var p in pts)
+            {
+                double x = 8 + (Math.Clamp(p.NormalizedProgress, 0, 100) / 100.0) * (w - 16);
+                double normY = Math.Clamp((p.Speed - 0.2) / 7.0, 0.0, 1.0);
+                double y = (h - 8) - normY * (h - 16);
+                poly.Points.Add(new System.Windows.Point(x, y));
+            }
+            SpeedCurveCanvas.Children.Add(poly);
+
+            foreach (var pt in poly.Points)
+            {
+                var dot = new Ellipse
+                {
+                    Width = 6,
+                    Height = 6,
+                    Fill = System.Windows.Media.Brushes.White,
+                    Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                    StrokeThickness = 1.5
+                };
+                Canvas.SetLeft(dot, pt.X - 3);
+                Canvas.SetTop(dot, pt.Y - 3);
+                SpeedCurveCanvas.Children.Add(dot);
+            }
+        }
+
+        private void BtnDetectBeats_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject == null) return;
+            var beats = AutoCutSilenceService.DetectAudioBeatMarkers(_currentProject, _activeCircleEditVideoPath, autoSplitClipsOnBeats: false);
+            RedrawTimeline();
+            TxtStatusBanner.Text = beats.Count > 0
+                ? $"🎵 Ses ritim analizi tamamlandı: {beats.Count} adet '🎵 BEAT' vuruş noktası Timeline üzerine işaretlendi!"
+                : "🎵 Belirgin ritim vuruşu bulunamadı (Arka plan müziği veya sesli bir video yükleyin).";
+        }
+
+        private void BtnSplitOnBeats_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject == null) return;
+            PushUndoSnapshot();
+            var beats = AutoCutSilenceService.DetectAudioBeatMarkers(_currentProject, _activeCircleEditVideoPath, autoSplitClipsOnBeats: true);
+            RedrawTimeline();
+            TxtStatusBanner.Text = beats.Count > 0
+                ? $"✂️ Video klipleri {beats.Count} adet müzik ritim (BEAT) vuruşundan otomatik bölündü!"
+                : "🎵 Bölünecek ritim vuruşu bulunamadı.";
+        }
+
+        private async void BtnRecordVoiceover_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isRecordingVoiceover)
+            {
+                string voDir = System.IO.Path.Combine(HardwareEncoderService.GetBaseStorageDir(), "Proje_Verileri", "Seslendirmeler");
+                Directory.CreateDirectory(voDir);
+                _activeVoiceoverWavPath = System.IO.Path.Combine(voDir, $"Circle_Seslendirme_{DateTime.Now:yyyyMMdd_HHmmss}.wav");
+                string dummySysWav = System.IO.Path.Combine(voDir, "_vo_sys_ignore.wav");
+
+                _isRecordingVoiceover = true;
+                if (BtnRecordVoiceover != null)
+                {
+                    BtnRecordVoiceover.Content = "⏹ Seslendirmeyi Bitir";
+                    BtnRecordVoiceover.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+                }
+
+                // Oynatıcıyı başa alıp sessiz oynatırken mikrofonu kaydet
+                if (CircleEditMediaPlayer.Source != null)
+                {
+                    CircleEditMediaPlayer.IsMuted = true;
+                    SeekCircleEditPlayer(0);
+                    PlayCircleEditPlayer();
+                }
+
+                _engine.AudioEngine.StartRecordingToWav(_activeVoiceoverWavPath, dummySysWav);
+                TxtStatusBanner.Text = "🎙️ Canlı Seslendirme (Voiceover) Kaydediliyor... Konuşmanız bittiğinde '⏹ Seslendirmeyi Bitir' butonuna basın.";
+            }
+            else
+            {
+                _isRecordingVoiceover = false;
+                _engine.AudioEngine.StopRecordingWav();
+                PauseCircleEditPlayer();
+                CircleEditMediaPlayer.IsMuted = _isPlayerMuted;
+
+                if (BtnRecordVoiceover != null)
+                {
+                    BtnRecordVoiceover.Content = "🎙️ Seslendirme";
+                    BtnRecordVoiceover.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
+                }
+
+                await Task.Delay(150);
+                if (!string.IsNullOrWhiteSpace(_activeVoiceoverWavPath) && File.Exists(_activeVoiceoverWavPath))
+                {
+                    _currentProject.ExternalAudioTrackPath = _activeVoiceoverWavPath;
+                    _currentProject.ExternalAudioVolumePercent = 80;
+                    if (SldBgmVolume != null) SldBgmVolume.Value = 80;
+                    if (TxtExternalAudioStatus != null)
+                        TxtExternalAudioStatus.Text = $"🎙️ Seslendirme: {System.IO.Path.GetFileName(_activeVoiceoverWavPath)}";
+                    TxtStatusBanner.Text = $"✅ Seslendirme kaydedildi ve projeye bağlandı: {System.IO.Path.GetFileName(_activeVoiceoverWavPath)}";
+                }
+            }
+        }
+
+        private async void BtnExtractAudio_Click(object sender, RoutedEventArgs e)
+        {
+            string srcVideo = !string.IsNullOrWhiteSpace(_activeCircleEditVideoPath) && File.Exists(_activeCircleEditVideoPath)
+                ? _activeCircleEditVideoPath
+                : (_isCircleEditShowingVertical ? _currentProject?.Vertical9x16VideoPath : _currentProject?.Horizontal16x9VideoPath);
+
+            if (string.IsNullOrWhiteSpace(srcVideo) || !File.Exists(srcVideo))
+            {
+                TxtStatusBanner.Text = "Sesi ayıklamak için önce bir video seçin.";
+                return;
+            }
+
+            string wavPath = await TimelineRenderService.ExtractAudioToWavAsync(
+                srcVideo,
+                msg => Dispatcher.Invoke(() => TxtStatusBanner.Text = msg));
+
+            if (!string.IsNullOrWhiteSpace(wavPath) && File.Exists(wavPath))
+            {
+                TxtStatusBanner.Text = $"🔊 Ses kanalı 48 kHz Stereo WAV olarak ayıklandı: {System.IO.Path.GetFileName(wavPath)}";
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"/select,\"{wavPath}\"",
+                        UseShellExecute = true
+                    });
+                }
+                catch { }
+            }
+        }
+
+        private async void BtnReverseClip_Click(object sender, RoutedEventArgs e)
+        {
+            string srcVideo = !string.IsNullOrWhiteSpace(_activeCircleEditVideoPath) && File.Exists(_activeCircleEditVideoPath)
+                ? _activeCircleEditVideoPath
+                : (_isCircleEditShowingVertical ? _currentProject?.Vertical9x16VideoPath : _currentProject?.Horizontal16x9VideoPath);
+
+            if (string.IsNullOrWhiteSpace(srcVideo) || !File.Exists(srcVideo))
+            {
+                TxtStatusBanner.Text = "Ters çevirmek için önce bir video seçin.";
+                return;
+            }
+
+            PauseCircleEditPlayer();
+            string outMp4 = await TimelineRenderService.RenderReversedClipAsync(
+                srcVideo,
+                _isCircleEditShowingVertical,
+                msg => Dispatcher.Invoke(() => TxtStatusBanner.Text = msg));
+
+            if (!string.IsNullOrWhiteSpace(outMp4) && File.Exists(outMp4))
+            {
+                RefreshCircleEditFolderLists();
+                LoadVideoIntoCircleEditEditor(outMp4, _isCircleEditShowingVertical, preserveCurrentProject: false);
+                TxtStatusBanner.Text = $"⏪ Video 60 FPS geriye doğru (Reverse) çevrildi ve yüklendi: {System.IO.Path.GetFileName(outMp4)}";
+            }
+        }
+
         private void ApplyTimelapseSpeed(double speed)
         {
             PushUndoSnapshot();
             _activeTimelapseSpeed = speed;
+            if (_currentProject != null)
+                _currentProject.ActiveSpeedCurve = SpeedCurvePreset.Constant;
+
+            _syncingSpeedCurveCombos = true;
+            if (CmbQuickSpeedCurve != null) CmbQuickSpeedCurve.SelectedIndex = 0;
+            if (CmbSpeedCurvePreset != null) CmbSpeedCurvePreset.SelectedIndex = 0;
+            _syncingSpeedCurveCombos = false;
+            RedrawSpeedCurveCanvas();
 
             if (_currentProject?.Clips != null && _currentProject.Clips.Count > 0)
             {
@@ -2073,18 +3197,22 @@ namespace CircleMixRecord
                 }
             }
 
-            if (CapCutMediaPlayer.Source != null)
+            if (CircleEditMediaPlayer.Source != null)
             {
                 try
                 {
-                    CapCutMediaPlayer.SpeedRatio = Math.Clamp(speed, 0.25, 8.0);
+                    CircleEditMediaPlayer.SpeedRatio = Math.Clamp(speed, 0.25, 8.0);
                 }
                 catch { }
             }
 
-            if (TxtCapCutSpeedBadge != null)
+            if (TxtCircleEditSpeedBadge != null)
             {
-                TxtCapCutSpeedBadge.Text = $"{speed:0.#}x";
+                TxtCircleEditSpeedBadge.Text = $"{speed:0.#}x";
+            }
+            if (TxtSpeedCurvePeakInfo != null)
+            {
+                TxtSpeedCurvePeakInfo.Text = $"{speed:0.#}x Sabit";
             }
 
             RedrawTimeline();
@@ -2101,34 +3229,37 @@ namespace CircleMixRecord
 
         private async void BtnRenderInstantTimelapse_Click(object sender, RoutedEventArgs e)
         {
-            string srcVideo = !string.IsNullOrWhiteSpace(_activeCapCutVideoPath) && File.Exists(_activeCapCutVideoPath)
-                ? _activeCapCutVideoPath
-                : (_isCapCutShowingVertical ? _currentProject?.Vertical9x16VideoPath : _currentProject?.Horizontal16x9VideoPath);
+            string srcVideo = !string.IsNullOrWhiteSpace(_activeCircleEditVideoPath) && File.Exists(_activeCircleEditVideoPath)
+                ? _activeCircleEditVideoPath
+                : (_isCircleEditShowingVertical ? _currentProject?.Vertical9x16VideoPath : _currentProject?.Horizontal16x9VideoPath);
 
             if (string.IsNullOrWhiteSpace(srcVideo) || !File.Exists(srcVideo))
             {
                 System.Windows.MessageBox.Show(
                     "Önce soldaki Yatay veya Dikey klasörden bir video seçin veya yeni bir kayıt alın.",
-                    "Timelapse Üretici", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Circle Studio — Timelapse & Hız Eğrisi", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
+            var curvePreset = _currentProject?.ActiveSpeedCurve ?? SpeedCurvePreset.Constant;
             double spd = _activeTimelapseSpeed <= 1.05 ? 4.0 : _activeTimelapseSpeed;
-            PauseCapCutPlayer();
+            PauseCircleEditPlayer();
 
-            string outFile = await TimelineRenderService.RenderInstantTimelapseAsync(
+            string outFile = await TimelineRenderService.RenderSpeedCurveVideoAsync(
                 srcVideo,
-                _isCapCutShowingVertical,
+                _isCircleEditShowingVertical,
+                curvePreset,
                 spd,
-                muteAudio: _isPlayerMuted || spd >= 8.0,
+                muteAudio: _isPlayerMuted || (curvePreset == SpeedCurvePreset.Constant && spd >= 8.0),
                 msg => Dispatcher.Invoke(() => TxtStatusBanner.Text = msg));
 
             if (!string.IsNullOrWhiteSpace(outFile) && File.Exists(outFile))
             {
-                RefreshCapCutFolderLists();
-                LoadVideoIntoCapCutEditor(outFile, _isCapCutShowingVertical, preserveCurrentProject: false);
+                RefreshCircleEditFolderLists();
+                LoadVideoIntoCircleEditEditor(outFile, _isCircleEditShowingVertical, preserveCurrentProject: false);
                 _activeTimelapseSpeed = 1.0;
-                TxtStatusBanner.Text = $"✅ 60 FPS Timelapse ({spd:0.#}x) videosu üretildi ve klasöre eklendi: {System.IO.Path.GetFileName(outFile)}";
+                string modeDesc = curvePreset == SpeedCurvePreset.Constant ? $"Timelapse ({spd:0.#}x)" : $"Hız Eğrisi ({curvePreset})";
+                TxtStatusBanner.Text = $"✅ 60 FPS {modeDesc} videosu üretildi ve klasöre eklendi: {System.IO.Path.GetFileName(outFile)}";
             }
         }
 
@@ -2187,7 +3318,7 @@ namespace CircleMixRecord
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
-                Title = "Circle Mix Record Projesi (.cmrproj) veya Video (.mp4/.mkv) Seçin",
+                Title = "Circle Studio Projesi (.cmrproj) veya Video (.mp4/.mkv) Seçin",
                 Filter = "Circle Mix & Video Dosyaları (*.cmrproj;*.mp4;*.mkv)|*.cmrproj;*.mp4;*.mkv|Tüm Dosyalar (*.*)|*.*"
             };
 
@@ -2203,12 +3334,12 @@ namespace CircleMixRecord
                         ? _currentProject.Horizontal16x9VideoPath
                         : _currentProject.Vertical9x16VideoPath;
                     if (File.Exists(vPath))
-                        LoadVideoIntoCapCutEditor(vPath, isVertical: false, preserveCurrentProject: true);
+                        LoadVideoIntoCircleEditEditor(vPath, isVertical: false, preserveCurrentProject: true);
                 }
                 else
                 {
                     bool isVert = dlg.FileName.Contains("Dikey", StringComparison.OrdinalIgnoreCase) || dlg.FileName.Contains("9x16", StringComparison.OrdinalIgnoreCase);
-                    LoadVideoIntoCapCutEditor(dlg.FileName, isVert, preserveCurrentProject: false);
+                    LoadVideoIntoCircleEditEditor(dlg.FileName, isVert, preserveCurrentProject: false);
                 }
 
                 RefreshSubtitleListBox();
@@ -2308,9 +3439,9 @@ namespace CircleMixRecord
 
         private void BtnGrabEditorFrame_Click(object sender, RoutedEventArgs e)
         {
-            string srcVideo = !string.IsNullOrWhiteSpace(_activeCapCutVideoPath) && File.Exists(_activeCapCutVideoPath)
-                ? _activeCapCutVideoPath
-                : (_isCapCutShowingVertical ? _currentProject?.Vertical9x16VideoPath : _currentProject?.Horizontal16x9VideoPath);
+            string srcVideo = !string.IsNullOrWhiteSpace(_activeCircleEditVideoPath) && File.Exists(_activeCircleEditVideoPath)
+                ? _activeCircleEditVideoPath
+                : (_isCircleEditShowingVertical ? _currentProject?.Vertical9x16VideoPath : _currentProject?.Horizontal16x9VideoPath);
 
             if (string.IsNullOrWhiteSpace(srcVideo) || !File.Exists(srcVideo))
             {
@@ -2318,11 +3449,11 @@ namespace CircleMixRecord
                 return;
             }
 
-            string targetDir = _isCapCutShowingVertical
+            string targetDir = _isCircleEditShowingVertical
                 ? HardwareEncoderService.GetVerticalRecordingsDir()
                 : HardwareEncoderService.GetHorizontalRecordingsDir();
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string outPng = System.IO.Path.Combine(targetDir, $"Kare_{(_isCapCutShowingVertical ? "9x16" : "16x9")}_{stamp}.png");
+            string outPng = System.IO.Path.Combine(targetDir, $"Kare_{(_isCircleEditShowingVertical ? "9x16" : "16x9")}_{stamp}.png");
 
             if (TimelineRenderService.ExtractSingleFramePng(srcVideo, _playheadSec, outPng))
             {
@@ -2336,7 +3467,7 @@ namespace CircleMixRecord
                     System.Windows.Clipboard.SetImage(bmp);
                 }
                 catch { }
-                RefreshCapCutFolderLists();
+                RefreshCircleEditFolderLists();
                 TxtStatusBanner.Text = $"📸 {_playheadSec:0.00}. saniyedeki kare PNG olarak kaydedildi ve panoya kopyalandı: {System.IO.Path.GetFileName(outPng)}";
             }
         }
@@ -2401,9 +3532,9 @@ namespace CircleMixRecord
                     _playheadSec = sel.SourceEndSec;
                 }
 
-                if (CapCutMediaPlayer != null && CapCutMediaPlayer.Source != null)
+                if (CircleEditMediaPlayer != null && CircleEditMediaPlayer.Source != null)
                 {
-                    try { CapCutMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec); } catch { }
+                    try { CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec); } catch { }
                 }
                 TxtTimelineTimecode.Text = $"{FormatShortTime(_playheadSec)} / {FormatShortTime(totalDur)}";
                 TxtStatusBanner.Text = $"✂️ Klip Ucu Kırpılıyor ({sel.Label}): {sel.SourceStartSec:0.00}s — {sel.SourceEndSec:0.00}s";
@@ -2442,11 +3573,11 @@ namespace CircleMixRecord
                 }
             }
 
-            if (CapCutMediaPlayer != null && CapCutMediaPlayer.Source != null)
+            if (CircleEditMediaPlayer != null && CircleEditMediaPlayer.Source != null)
             {
                 try
                 {
-                    CapCutMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec);
+                    CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec);
                 }
                 catch { }
             }
@@ -2711,6 +3842,42 @@ namespace CircleMixRecord
                 }
             }
 
+            // 5B. Profesyonel Xfade / Beat-Sync Geçiş İşaretçileri (06.0s • 11.9s • 17.8s • 23.7s)
+            var transitionPoints = _currentProject.Clips.Count >= 2
+                ? _currentProject.Clips.Skip(1).Select(c => c.SourceStartSec).ToArray()
+                : new[] { 6.00, 11.90, 17.80, 23.70 };
+            foreach (double beatSec in transitionPoints)
+            {
+                if (beatSec > 0.5 && beatSec < totalDur - 0.5)
+                {
+                    double bx = headerW + (beatSec / totalDur) * trackAreaW;
+                    var beatLine = new Line
+                    {
+                        X1 = bx,
+                        Y1 = 18,
+                        X2 = bx,
+                        Y2 = canvasH,
+                        Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        StrokeThickness = 1.8,
+                        StrokeDashArray = new DoubleCollection { 3, 2 }
+                    };
+                    TimelineCanvas.Children.Add(beatLine);
+
+                    var beatBadge = new TextBlock
+                    {
+                        Text = $"🎬 XFADE {beatSec:0.0}s",
+                        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)),
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        FontSize = 9.5,
+                        FontWeight = FontWeights.Bold,
+                        Padding = new Thickness(4, 1, 4, 1)
+                    };
+                    Canvas.SetLeft(beatBadge, Math.Max(headerW, bx - 36));
+                    Canvas.SetTop(beatBadge, canvasH - 22);
+                    TimelineCanvas.Children.Add(beatBadge);
+                }
+            }
+
             // 6. Turuncu Playhead Çizgisi
             double px = headerW + (_playheadSec / totalDur) * trackAreaW;
             var playheadLine = new Line
@@ -2723,6 +3890,12 @@ namespace CircleMixRecord
                 StrokeThickness = 2
             };
             TimelineCanvas.Children.Add(playheadLine);
+        }
+
+        private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (Keyboard.FocusedElement is System.Windows.Controls.TextBox)
+                return;
         }
 
         private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -2753,12 +3926,12 @@ namespace CircleMixRecord
             }
             else if (e.Key == Key.Left && _activeStudioMode == "Edit")
             {
-                SeekCapCutPlayer(Math.Max(0.0, _playheadSec - 1.0));
+                SeekCircleEditPlayer(Math.Max(0.0, _playheadSec - 1.0));
                 e.Handled = true;
             }
             else if (e.Key == Key.Right && _activeStudioMode == "Edit")
             {
-                SeekCapCutPlayer(Math.Min(_currentProject?.TotalDurationSec ?? 10.0, _playheadSec + 1.0));
+                SeekCircleEditPlayer(Math.Min(_currentProject?.TotalDurationSec ?? 10.0, _playheadSec + 1.0));
                 e.Handled = true;
             }
             else if (e.Key == Key.M && Keyboard.Modifiers == ModifierKeys.None)
@@ -2767,7 +3940,6 @@ namespace CircleMixRecord
                 e.Handled = true;
             }
         }
-
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             _uiTimer.Stop();
@@ -2780,7 +3952,7 @@ namespace CircleMixRecord
                         HK_REC, HK_PAUSE, HK_ZOOM, HK_LOCK, HK_MARKER, HK_SCREENSHOT,
                         HK_REC_VERT, HK_MARKER_CSM, HK_SPLIT_PART, HK_SCREENSHOT_CSK,
                         HK_CAM_TOGGLE, HK_MIC_MUTE, HK_SYS_MUTE,
-                        HK_SCENE_1, HK_SCENE_2, HK_SCENE_3, HK_SCENE_4
+                        HK_SCENE_1, HK_SCENE_2, HK_SCENE_3, HK_SCENE_4, HK_INTERMISSION
                     };
                     foreach (int hk in allHotkeys)
                         UnregisterHotKey(_hwnd, hk);
@@ -2799,3 +3971,5 @@ namespace CircleMixRecord
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
     }
 }
+
+

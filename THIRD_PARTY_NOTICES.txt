@@ -1,0 +1,28 @@
+CIRCLE MIX RECORD — THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+================================================================
+
+Circle Mix Record (Commercial Edition)
+Copyright (c) 2026 thezencirs. All rights reserved.
+
+This application incorporates or invokes unmodified third-party open-source software components listed below:
+
+----------------------------------------------------------------
+1. FFmpeg (Unmodified Shared-Library LGPL Build)
+----------------------------------------------------------------
+Circle Mix Record invokes unmodified FFmpeg command-line executables and shared libraries (`bin\ffmpeg.exe`, `avcodec-*.dll`, `avformat-*.dll`, `avutil-*.dll`, `avfilter-*.dll`, `avdevice-*.dll`, `swresample-*.dll`, `swscale-*.dll`) as a separate external process (`Process.Start`) for media encoding, muxing, and audio/video filtering.
+
+- License: GNU Lesser General Public License (LGPL) version 2.1 or later / version 3 (compiled without `--enable-gpl` and without `--enable-nonfree`).
+- Copyright (c) 2000-2026 the FFmpeg developers.
+- Official Website & Source Code: https://ffmpeg.org/download.html
+- Exact Build Configuration & Corresponding Source Scripts: https://github.com/BtbN/FFmpeg-Builds (win64-lgpl-shared target).
+- Dynamic Replacement Notice (LGPL Compliance): All FFmpeg shared libraries reside in the `bin\` subdirectory as separate `.dll` and `.exe` files and may be inspected or replaced with compatible LGPL builds by the end user. Full license text of FFmpeg and its sub-libraries is included in `bin\FFMPEG_LICENSE.txt`.
+
+----------------------------------------------------------------
+2. Cisco OpenH264 (via FFmpeg LGPL build, where applicable)
+----------------------------------------------------------------
+- Copyright (c) 2013, Cisco Systems, Inc. Licensed under the BSD 2-Clause License.
+
+----------------------------------------------------------------
+3. .NET Runtime / WPF (Microsoft Corporation)
+----------------------------------------------------------------
+- Copyright (c) .NET Foundation and Contributors. Licensed under the MIT License (https://github.com/dotnet/runtime).

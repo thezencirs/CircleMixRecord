@@ -1,4 +1,4 @@
-// Copyright (c) 2026 thezencirs (https://github.com/thezencirs)
+﻿// Copyright (c) 2026 thezencirs (https://github.com/thezencirs)
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 
 using System;
@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -16,29 +17,68 @@ namespace CircleMixRecord.Services
         public string FriendlyName { get; set; } = "";
         public string AlternativeName { get; set; } = "";
         public bool IsVideo { get; set; }
-        public bool IsNvidiaBroadcast => FriendlyName.Contains("NVIDIA Broadcast", StringComparison.OrdinalIgnoreCase)
-                                      || FriendlyName.Contains("Broadcast", StringComparison.OrdinalIgnoreCase);
-        public bool IsVirtual => FriendlyName.Contains("Virtual", StringComparison.OrdinalIgnoreCase)
-                              || FriendlyName.Contains("OBS", StringComparison.OrdinalIgnoreCase);
+        public bool IsWirelessStudioMic => !IsVideo && (
+            FriendlyName.Contains("Wireless Mic", StringComparison.OrdinalIgnoreCase) ||
+            FriendlyName.Contains("Wireless", StringComparison.OrdinalIgnoreCase));
+        public bool IsStudioBroadcast => FriendlyName.Contains("Broadcast", StringComparison.OrdinalIgnoreCase);
+        public bool IsVirtual => FriendlyName.Contains("Virtual", StringComparison.OrdinalIgnoreCase);
 
-        public int SortPriority => IsNvidiaBroadcast ? 0 : (IsVirtual ? 2 : 1);
+        public int SortPriority => IsWirelessStudioMic ? -1 : (IsStudioBroadcast ? 0 : (IsVirtual ? 2 : 1));
 
         public string FfmpegInputIdentifier => !string.IsNullOrWhiteSpace(AlternativeName) ? AlternativeName : FriendlyName;
-        public override string ToString() => IsNvidiaBroadcast ? $"⭐ {FriendlyName} (Varsayılan)" : FriendlyName;
+        public override string ToString() => IsWirelessStudioMic
+            ? $"🎙️ {FriendlyName} (Kablosuz Stüdyo • #1)"
+            : (IsStudioBroadcast ? $"⭐ {FriendlyName} (Varsayılan)" : FriendlyName);
     }
 
     public class HardwareEncoderInfo
     {
-        public string CodecName { get; set; } = "libx264";
-        public string DisplayName { get; set; } = "CPU x264 (Ultrafast)";
-        public string PresetArgs { get; set; } = "-preset ultrafast -crf 20";
+        public string CodecName { get; set; } = "h264_mf";
+        public string DisplayName { get; set; } = "Windows Media Foundation H.264";
+        public string PresetArgs { get; set; } = "-b:v 12M";
         public bool IsHardware { get; set; } = false;
     }
 
     public static class HardwareEncoderService
     {
+        private const int APPMODEL_ERROR_NO_PACKAGE = 15700;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+        private static extern int GetCurrentPackageFullName(ref int packageFullNameLength, StringBuilder packageFullName);
+
         private static string _cachedFfmpegPath;
+        private static string _cachedBaseStorageDir;
         private static HardwareEncoderInfo _cachedEncoder;
+
+        public static bool IsRunningAsMsixPackage()
+        {
+            try
+            {
+                int length = 0;
+                int rc = GetCurrentPackageFullName(ref length, null);
+                return rc != APPMODEL_ERROR_NO_PACKAGE && length > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsDirectoryWritable(string dirPath)
+        {
+            try
+            {
+                Directory.CreateDirectory(dirPath);
+                string probe = Path.Combine(dirPath, $".cmr_write_{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(probe, "ok");
+                File.Delete(probe);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public static string GetFfmpegPath()
         {
@@ -48,9 +88,8 @@ namespace CircleMixRecord.Services
             string appDir = AppDomain.CurrentDomain.BaseDirectory;
             string[] candidates = new[]
             {
-                Path.Combine(appDir, "ffmpeg.exe"),
                 Path.Combine(appDir, "bin", "ffmpeg.exe"),
-                @"C:\Users\zenci\AppData\Local\CircleRender\bin\ffmpeg.exe",
+                Path.Combine(appDir, "ffmpeg.exe"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"CircleRender\bin\ffmpeg.exe"),
                 @"C:\Program Files\ffmpeg\bin\ffmpeg.exe"
             };
@@ -70,9 +109,38 @@ namespace CircleMixRecord.Services
 
         public static string GetBaseStorageDir()
         {
-            string baseDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Kayitlar_ve_Projeler");
-            Directory.CreateDirectory(baseDir);
-            return baseDir;
+            if (!string.IsNullOrWhiteSpace(_cachedBaseStorageDir))
+            {
+                Directory.CreateDirectory(_cachedBaseStorageDir);
+                return _cachedBaseStorageDir;
+            }
+
+            string appDir = AppDomain.CurrentDomain.BaseDirectory ?? "";
+            string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+            bool inProtectedInstallDir = IsRunningAsMsixPackage()
+                || appDir.Contains(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(progFiles) && appDir.StartsWith(progFiles, StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(progFilesX86) && appDir.StartsWith(progFilesX86, StringComparison.OrdinalIgnoreCase));
+
+            if (!inProtectedInstallDir)
+            {
+                string portableDir = Path.Combine(appDir, "Kayitlar_ve_Projeler");
+                if (IsDirectoryWritable(portableDir))
+                {
+                    _cachedBaseStorageDir = portableDir;
+                    return _cachedBaseStorageDir;
+                }
+            }
+
+            string videosRoot = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+            if (string.IsNullOrWhiteSpace(videosRoot))
+                videosRoot = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+            _cachedBaseStorageDir = Path.Combine(videosRoot, "CircleMixRecord");
+            Directory.CreateDirectory(_cachedBaseStorageDir);
+            return _cachedBaseStorageDir;
         }
 
         public static string GetHorizontalRecordingsDir()
@@ -84,7 +152,7 @@ namespace CircleMixRecord.Services
 
         public static string GetVerticalRecordingsDir()
         {
-            string dir = Path.Combine(GetBaseStorageDir(), "Dikey_9x16_Reels_Kayitlar");
+            string dir = Path.Combine(GetBaseStorageDir(), "Dikey_9x16_Kayitlar");
             Directory.CreateDirectory(dir);
             return dir;
         }
@@ -113,7 +181,7 @@ namespace CircleMixRecord.Services
                 new HardwareEncoderInfo
                 {
                     CodecName = "h264_nvenc",
-                    DisplayName = "NVIDIA NVENC Ultra HQ (CQP 16 • 0% CPU)",
+                    DisplayName = "Circle GPU Ultra HQ (CQP 16 • 0% CPU)",
                     PresetArgs = "-preset p4 -tune hq -rc vbr -cq 16 -b:v 0 -maxrate 25M -bufsize 50M",
                     IsHardware = true
                 },
@@ -130,6 +198,27 @@ namespace CircleMixRecord.Services
                     DisplayName = "AMD AMF HQ (Donanım Hızlandırma)",
                     PresetArgs = "-quality quality -rc cqp -qp_i 16 -qp_p 16",
                     IsHardware = true
+                },
+                new HardwareEncoderInfo
+                {
+                    CodecName = "h264_mf",
+                    DisplayName = "Windows Media Foundation H.264 HQ",
+                    PresetArgs = "-b:v 12M",
+                    IsHardware = false
+                },
+                new HardwareEncoderInfo
+                {
+                    CodecName = "libopenh264",
+                    DisplayName = "Cisco OpenH264 HQ (CPU)",
+                    PresetArgs = "-b:v 10M -maxrate 16M",
+                    IsHardware = false
+                },
+                new HardwareEncoderInfo
+                {
+                    CodecName = "libx264",
+                    DisplayName = "CPU x264 HQ (Çok Çekirdekli Yedek)",
+                    PresetArgs = "-preset superfast -crf 17",
+                    IsHardware = false
                 }
             };
 
@@ -144,9 +233,9 @@ namespace CircleMixRecord.Services
 
             _cachedEncoder = new HardwareEncoderInfo
             {
-                CodecName = "libx264",
-                DisplayName = "CPU x264 HQ (Çok Çekirdekli Yedek)",
-                PresetArgs = "-preset superfast -crf 17",
+                CodecName = "mpeg4",
+                DisplayName = "CPU MPEG-4 (Evrensel Yedek)",
+                PresetArgs = "-qscale:v 3",
                 IsHardware = false
             };
             return _cachedEncoder;
@@ -228,10 +317,11 @@ namespace CircleMixRecord.Services
             }
             catch { }
 
-            // NVIDIA Broadcast her zaman 1. sırada (Varsayılan), ardından fiziksel kameralar/mikrofonlar gelsin
+            // Circle Broadcast her zaman 1. sırada (Varsayılan), ardından fiziksel kameralar/mikrofonlar gelsin
             videos = videos.OrderBy(v => v.SortPriority).ToList();
             audios = audios.OrderBy(a => a.SortPriority).ToList();
             return (videos, audios);
         }
     }
 }
+
