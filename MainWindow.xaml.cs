@@ -106,6 +106,18 @@ namespace CircleMixRecord
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            CircleUpdaterService.CleanupOldExecutable();
+            if (!CircleLicenseService.EnsureLicensed(this))
+            {
+                Close();
+                return;
+            }
+            if (CircleLicenseService.IsFounderMachine() && BtnLicenseManager != null)
+            {
+                BtnLicenseManager.Visibility = Visibility.Visible;
+            }
+            CircleUpdaterService.CheckForUpdatesInBackground(this, manual: false);
+
             _uiReady = true;
 
             // Global Kısayolları Kaydet (Circle Studio Global Kısayollar + Tam Ekran 3B / CAD içindeyken de çalışır)
@@ -1326,6 +1338,11 @@ namespace CircleMixRecord
                     : new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
             }
             TxtStatusBanner.Text = nextState ? "Kamera açık" : "Kamera gizlendi";
+        }
+
+        private void BtnLicenseManager_Click(object sender, RoutedEventArgs e)
+        {
+            CircleLicenseService.ShowFounderLicenseAdminWindow(this);
         }
 
         private void BtnShowShortcuts_Click(object sender, RoutedEventArgs e)

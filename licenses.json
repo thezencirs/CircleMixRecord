@@ -1,0 +1,26 @@
+{
+  "UpdatedAt": "2026-11-24T20:38:00.0000000Z",
+  "Licenses": [
+    {
+      "Key": "CST-2026-8F4A-PH5K",
+      "Owner": "Kullanıcı #1 (PRO Lisans)",
+      "Status": "active",
+      "CreatedAt": "2026-11-24",
+      "ExpiresAt": "2027-11-24"
+    },
+    {
+      "Key": "CST-2026-M7K9-YGCW",
+      "Owner": "Kullanıcı #2 (Yedek PRO Lisans)",
+      "Status": "active",
+      "CreatedAt": "2026-11-24",
+      "ExpiresAt": "2027-11-24"
+    },
+    {
+      "Key": "CST-2026-PRO1-77MU",
+      "Owner": "VIP / Kurumsal PRO Lisans",
+      "Status": "active",
+      "CreatedAt": "2026-11-24",
+      "ExpiresAt": "2028-11-24"
+    }
+  ]
+}

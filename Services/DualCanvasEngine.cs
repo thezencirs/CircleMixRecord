@@ -299,6 +299,7 @@ namespace CircleMixRecord.Services
             if (_running) return;
             _running = true;
 
+            Task.Run(RecoverUnfinishedRecordings);
             AudioEngine.StartMonitoring();
             if (cameraDevice != null)
             {
@@ -312,6 +313,62 @@ namespace CircleMixRecord.Services
                 Name = "DualCanvas_Compositor"
             };
             _compositorThread.Start();
+        }
+
+        /// <summary>
+        /// Elektrik kesintisi, erken kapatma veya yarım kalan birleştirme sonrası Proje_Verileri içindeki
+        /// _temp_16x9.mkv / _temp_9x16.mkv ve Master_Mic.wav dosyalarından bozuk/eksik MP4 kayıtlarını otomatik kurtarır.
+        /// </summary>
+        public static void RecoverUnfinishedRecordings()
+        {
+            try
+            {
+                string baseRoot = Path.Combine(HardwareEncoderService.GetBaseStorageDir(), "Proje_Verileri");
+                if (!Directory.Exists(baseRoot)) return;
+                string horizDir = HardwareEncoderService.GetHorizontalRecordingsDir();
+                string vertDir = HardwareEncoderService.GetVerticalRecordingsDir();
+
+                foreach (string projDir in Directory.GetDirectories(baseRoot))
+                {
+                    string projName = Path.GetFileName(projDir);
+                    if (string.IsNullOrWhiteSpace(projName) || projName.StartsWith("_")) continue;
+
+                    string raw16 = Path.Combine(projDir, "_temp_16x9.mkv");
+                    string raw9 = Path.Combine(projDir, "_temp_9x16.mkv");
+                    if (!File.Exists(raw16) && !File.Exists(raw9)) continue;
+
+                    string out16 = Path.Combine(horizDir, $"{projName}_Yatay_16x9.mp4");
+                    string out9 = Path.Combine(vertDir, $"{projName}_Dikey_9x16.mp4");
+
+                    bool need16 = File.Exists(raw16) && (!File.Exists(out16) || new FileInfo(out16).Length < new FileInfo(raw16).Length * 0.85);
+                    bool need9 = File.Exists(raw9) && (!File.Exists(out9) || new FileInfo(out9).Length < new FileInfo(raw9).Length * 0.85);
+
+                    if (!need16 && !need9)
+                    {
+                        try { if (File.Exists(raw16)) File.Delete(raw16); } catch { }
+                        try { if (File.Exists(raw9)) File.Delete(raw9); } catch { }
+                        continue;
+                    }
+
+                    string micWav = Path.Combine(projDir, "Master_Mic.wav");
+                    string sysWav = Path.Combine(projDir, "Master_System.wav");
+                    string masterM4a = PrepareMasterAudioTrack(projDir, micWav, sysWav, micAlreadyDenoised: true);
+
+                    if (need16 && MuxVideoWithPreparedAudio(raw16, masterM4a, out16))
+                    {
+                        try { File.Delete(raw16); } catch { }
+                    }
+                    if (need9 && MuxVideoWithPreparedAudio(raw9, masterM4a, out9))
+                    {
+                        try { File.Delete(raw9); } catch { }
+                    }
+                    if (!string.IsNullOrEmpty(masterM4a) && File.Exists(masterM4a))
+                    {
+                        try { File.Delete(masterM4a); } catch { }
+                    }
+                }
+            }
+            catch { }
         }
 
         public void SwitchCamera(DirectShowDevice cameraDevice, DirectShowDevice fallbackCamera = null)
@@ -874,6 +931,7 @@ namespace CircleMixRecord.Services
             {
                 string raw16Mkv = Path.Combine(proj.ProjectDirectory, "_temp_16x9.mkv");
                 string raw9Mkv = Path.Combine(proj.ProjectDirectory, "_temp_9x16.mkv");
+                string masterAudioM4a = PrepareMasterAudioTrack(proj.ProjectDirectory, proj.MicrophoneWavPath, proj.SystemAudioWavPath, usedBroadcastMic);
 
                 if (File.Exists(raw16Mkv))
                 {
@@ -1029,7 +1087,7 @@ namespace CircleMixRecord.Services
                 {
                     proc.StandardInput.BaseStream.Flush();
                     proc.StandardInput.Close();
-                    proc.WaitForExit(4000);
+                    proc.WaitForExit(15000);
                     if (!proc.HasExited) proc.Kill();
                 }
             }
@@ -1043,11 +1101,17 @@ namespace CircleMixRecord.Services
 
         private static void MuxVideoAndDualAudio(string videoMkv, string micWav, string sysWav, string outMp4, bool micAlreadyDenoised)
         {
-            if (!File.Exists(videoMkv)) return;
             string ff = HardwareEncoderService.GetFfmpegPath();
+            string outM4a = Path.Combine(projectDir, "_temp_master_audio.m4a");
 
             bool hasMic = File.Exists(micWav) && new FileInfo(micWav).Length > 1000;
             bool hasSys = File.Exists(sysWav) && new FileInfo(sysWav).Length > 1000;
+            if (!hasMic && !hasSys) return null;
+
+            // Tek geçişli hızlı stüdyo ses mastering zinciri (2 saatlik kaydı iki kez işlemek yerine tek seferde ~15 sn içinde AAC'ye kodlar)
+            string micChain = micAlreadyDenoised
+                ? "highpass=f=80,acompressor=threshold=-20dB:ratio=3:attack=10:release=200:makeup=3dB,alimiter=limit=0.95,aresample=48000"
+                : "highpass=f=90,afftdn=nf=-25:tn=1,acompressor=threshold=-20dB:ratio=3:attack=10:release=200:makeup=3dB,alimiter=limit=0.95,aresample=48000";
 
             // Ses Mastering Zinciri:
             //  - Circle Broadcast (AI gürültü temizlenmiş) → ikinci kez gürültü silme YOK (robotik ses yapar), hafif kompresör.
@@ -1092,15 +1156,63 @@ namespace CircleMixRecord.Services
                     CreateNoWindow = true
                 };
                 using var p = Process.Start(psi);
-                p?.WaitForExit(20000);
+                p?.WaitForExit(600000); // 10 dakikaya kadar izin ver (2-4 saatlik ders kayıtlarında yarıda kesilmesin!)
+                if (File.Exists(outM4a) && new FileInfo(outM4a).Length > 512)
+                    return outM4a;
             }
             catch { }
+            return null;
+        }
 
-            // Eğer birleştirme herhangi bir sebeple başarısız olduysa, yedek olarak doğrudan kopyala
-            if (!File.Exists(outMp4) && File.Exists(videoMkv))
+        private static bool MuxVideoWithPreparedAudio(string videoMkv, string masterAudioM4a, string outMp4)
+        {
+            if (!File.Exists(videoMkv)) return false;
+            string ff = HardwareEncoderService.GetFfmpegPath();
+            string tmpMp4 = outMp4 + ".muxing.mp4";
+
+            bool hasAudio = !string.IsNullOrEmpty(masterAudioM4a) && File.Exists(masterAudioM4a) && new FileInfo(masterAudioM4a).Length > 512;
+            string args = hasAudio
+                ? $"-y -hide_banner -loglevel error -i \"{videoMkv}\" -i \"{masterAudioM4a}\" -map 0:v:0 -map 1:a:0 -c:v copy -c:a copy -movflags +faststart \"{tmpMp4}\""
+                : $"-y -hide_banner -loglevel error -i \"{videoMkv}\" -f lavfi -i anullsrc=r=48000:cl=stereo -c:v copy -c:a aac -b:a 128k -shortest -movflags +faststart \"{tmpMp4}\"";
+
+            try
             {
-                try { File.Copy(videoMkv, outMp4, true); } catch { }
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ff,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var p = Process.Start(psi);
+                bool exited = p != null && p.WaitForExit(600000);
+                if (exited && p.ExitCode == 0 && File.Exists(tmpMp4) && new FileInfo(tmpMp4).Length > 1024)
+                {
+                    File.Move(tmpMp4, outMp4, overwrite: true);
+                    return true;
+                }
             }
+            catch { }
+            finally
+            {
+                try { if (File.Exists(tmpMp4)) File.Delete(tmpMp4); } catch { }
+            }
+
+            // Yedek: Doğrudan sadece video akışını MP4 konteynerine kayıpsız aktar
+            try
+            {
+                var psiFallback = new ProcessStartInfo
+                {
+                    FileName = ff,
+                    Arguments = $"-y -hide_banner -loglevel error -i \"{videoMkv}\" -c:v copy -movflags +faststart \"{outMp4}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var p2 = Process.Start(psiFallback);
+                p2?.WaitForExit(180000);
+                return File.Exists(outMp4) && new FileInfo(outMp4).Length > 1024;
+            }
+            catch { return false; }
         }
 
         private void CompositorLoop()
