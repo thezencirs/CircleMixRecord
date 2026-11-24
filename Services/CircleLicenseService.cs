@@ -585,7 +585,7 @@ namespace CircleMixRecord.Services
                 Background = bgCard,
                 BorderBrush = borderBr,
                 Foreground = whiteBr,
-                FontFamily = new FontFamily("Consolas"),
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
                 FontSize = 13,
                 Padding = new Thickness(8),
                 Margin = new Thickness(0, 0, 0, 12)
