@@ -35,6 +35,10 @@ namespace CircleMixRecord
         private int _selectedClipIndex = 0;
         private bool _isDraggingPlayhead = false;
         private int _trimDragMode = 0; // 0: yok, 1: sol uç kırpma, 2: sağ uç kırpma
+        private double _trimDragStartMouseX = 0.0;
+        private double _trimDragOrigSourceStart = 0.0;
+        private double _trimDragOrigSourceEnd = 0.0;
+        private double _trimDragInitialNetDur = 10.0;
         private bool _uiReady = false;
         private string _activeStudioMode = "Home";
         private string _lastExported16x9Path = "";
@@ -531,7 +535,7 @@ namespace CircleMixRecord
                     : $"{_engine.StudioHealthScore}%";
             }
 
-            // Circle Edit Video Oynatıcı Playhead Senkronizasyonu + Silinen Klipleri Otomatik Atlama + Canlı Timelapse Hızı
+            // Circle Edit Video Oynatıcı Playhead Senkronizasyonu + Silinen/Kırpılan Klipleri Otomatik Atlama + Canlı Timelapse Hızı
             if (_activeStudioMode == "Edit" && _isPlayerPlaying && CircleEditMediaPlayer.Source != null && !_isDraggingPlayhead)
             {
                 try
@@ -542,41 +546,41 @@ namespace CircleMixRecord
                         _playheadSec = posSec;
                         if (_currentProject?.Clips != null && _currentProject.Clips.Count > 0)
                         {
-                            for (int i = 0; i < _currentProject.Clips.Count; i++)
+                            var activeClips = _currentProject.Clips.Where(x => !x.IsDeleted && x.SourceDurationSec >= 0.08).OrderBy(x => x.SourceStartSec).ToList();
+                            if (activeClips.Count > 0)
                             {
-                                var c = _currentProject.Clips[i];
-                                if (_playheadSec >= c.SourceStartSec && _playheadSec < c.SourceEndSec)
+                                var currentActive = activeClips.FirstOrDefault(x => _playheadSec >= x.SourceStartSec - 0.04 && _playheadSec < x.SourceEndSec);
+                                if (currentActive != null)
                                 {
-                                    _selectedClipIndex = i;
-                                    // Eğer bu klip silindiyse (Ripple Delete / Del), anında bir sonraki sağlam klibe atla!
-                                    if (c.IsDeleted)
-                                    {
-                                        double jumpTarget = c.SourceEndSec + 0.03;
-                                        if (jumpTarget < _currentProject.TotalDurationSec)
-                                        {
-                                            CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(jumpTarget);
-                                            _playheadSec = jumpTarget;
-                                        }
-                                        else
-                                        {
-                                            PauseCircleEditPlayer();
-                                        }
-                                        break;
-                                    }
-
-                                    // Klip hızına göre (Timelapse / 8x Dead Air) gerçek zamanlı oynatma hızını ayarla
-                                    double targetRatio = Math.Clamp(c.SpeedMultiplier, 0.25, 8.0);
+                                    _selectedClipIndex = _currentProject.Clips.IndexOf(currentActive);
+                                    double targetRatio = Math.Clamp(currentActive.SpeedMultiplier, 0.25, 8.0);
                                     if (Math.Abs(CircleEditMediaPlayer.SpeedRatio - targetRatio) > 0.05)
                                     {
                                         CircleEditMediaPlayer.SpeedRatio = targetRatio;
                                     }
-                                    break;
+                                }
+                                else
+                                {
+                                    // Silinmiş (Del) veya baştan/ortadan kırpılmış bölgedeyiz -> anında sıradaki sağlam klibe birleştirerek atla!
+                                    var nextActive = activeClips.FirstOrDefault(x => x.SourceStartSec > _playheadSec - 0.02);
+                                    if (nextActive != null)
+                                    {
+                                        CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(nextActive.SourceStartSec);
+                                        _playheadSec = nextActive.SourceStartSec;
+                                        _selectedClipIndex = _currentProject.Clips.IndexOf(nextActive);
+                                    }
+                                    else
+                                    {
+                                        // Son sağlam klibin bitişine ulaşıldı (sondan kırpılmış kısma girmeden durdur)
+                                        _playheadSec = activeClips.Last().SourceEndSec;
+                                        PauseCircleEditPlayer();
+                                    }
                                 }
                             }
                         }
 
-                        double totalDur = Math.Max(1.0, _currentProject?.TotalDurationSec ?? 10.0);
-                        TxtTimelineTimecode.Text = $"{FormatShortTime(_playheadSec)} / {FormatShortTime(totalDur)}";
+                        double curMag = SourceSecToMagneticSec(_playheadSec, _selectedClipIndex, out double netTotalDur);
+                        TxtTimelineTimecode.Text = $"{FormatShortTime(curMag)} / {FormatShortTime(netTotalDur)}";
                         UpdateLiveSubtitleOverlay();
                         RedrawTimeline();
                     }
@@ -1350,6 +1354,7 @@ namespace CircleMixRecord
             string info =
                 "CIRCLE STUDIO v1.1 — KISAYOLLAR & HAKKINDA\n" +
                 "by thezencirs\n" +
+                $"Lisans Durumu: {CircleLicenseService.ActiveLicenseStatus}\n" +
                 "Copyright © 2026 thezencirs. Tüm hakları saklıdır.\n" +
                 "Medya işleme altyapısında LGPL v3 lisanslı FFmpeg kullanılmaktadır.\n" +
                 "──────────────────────────────────────────────────────────\n\n" +
@@ -2683,14 +2688,15 @@ namespace CircleMixRecord
         {
             if (string.IsNullOrWhiteSpace(videoPath) || !File.Exists(videoPath)) return;
 
+            var probe = TimelineRenderService.ProbeMediaInfo(videoPath);
+            if (probe.HasVideo && probe.Width > 0 && probe.Height > 0 && !preserveCurrentProject)
+            {
+                // Videonun gerçek çözünürlük ve telefon Display Matrix döndürme bilgisinden otomatik Dikey (9:16) / Yatay (16:9) algıla!
+                isVertical = probe.IsVertical;
+            }
+
             _activeCircleEditVideoPath = videoPath;
             _isCircleEditShowingVertical = isVertical;
-            TxtCircleEditActiveFile.Text = $"{System.IO.Path.GetFileName(videoPath)} ({(isVertical ? "9:16 Dikey" : "16:9 Yatay")})";
-
-            var activeBtnBg = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
-            var idleBtnBg = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
-            if (BtnCircleEditView16x9 != null) BtnCircleEditView16x9.Background = !isVertical ? activeBtnBg : idleBtnBg;
-            if (BtnCircleEditView9x16 != null) BtnCircleEditView9x16.Background = isVertical ? activeBtnBg : idleBtnBg;
 
             if (!preserveCurrentProject)
             {
@@ -2704,14 +2710,16 @@ namespace CircleMixRecord
                     string hMatch = System.IO.Path.Combine(
                         HardwareEncoderService.GetHorizontalRecordingsDir(),
                         baseName.Replace("_Dikey_9x16", "_Yatay_16x9") + ".mp4");
-                    if (File.Exists(hMatch)) horizCandidate = hMatch;
+                    if (File.Exists(hMatch) && !string.Equals(hMatch, videoPath, StringComparison.OrdinalIgnoreCase))
+                        horizCandidate = hMatch;
                 }
                 else
                 {
                     string vMatch = System.IO.Path.Combine(
                         HardwareEncoderService.GetVerticalRecordingsDir(),
                         baseName.Replace("_Yatay_16x9", "_Dikey_9x16") + ".mp4");
-                    if (File.Exists(vMatch)) vertCandidate = vMatch;
+                    if (File.Exists(vMatch) && !string.Equals(vMatch, videoPath, StringComparison.OrdinalIgnoreCase))
+                        vertCandidate = vMatch;
                 }
 
                 _currentProject = new CmrProject
@@ -2721,10 +2729,16 @@ namespace CircleMixRecord
                     MasterCleanVideoPath = horizCandidate,
                     Horizontal16x9VideoPath = horizCandidate,
                     Vertical9x16VideoPath = vertCandidate,
-                    TotalDurationSec = 15.0
+                    TotalDurationSec = probe.DurationSec > 0.5 ? probe.DurationSec : 15.0,
+                    MetadataRotationCwDeg = probe.RotationCwDeg,
+                    UserExtraRotationCwDeg = 0,
+                    Enable4KUltraUpscale = ChkCircle4KUltraUpscale?.IsChecked ?? true
                 };
                 _undoStack.Clear();
             }
+
+            ApplyCircleEditPlayerRotationTransform();
+            UpdateCircleEditHeaderOrientationBadges();
 
             BdrCircleEditEmptyState.Visibility = Visibility.Collapsed;
             CircleEditMediaPlayer.Visibility = Visibility.Visible;
@@ -2741,7 +2755,50 @@ namespace CircleMixRecord
             }
             catch { }
 
-            TxtStatusBanner.Text = $"🎬 Circle Edit Kurguya Yüklendi: {System.IO.Path.GetFileName(videoPath)} — Space ile Oynat/Duraklat, S ile Kes, Del ile Sil, 2x-30x ile Timelapse yapın.";
+            string orientInfo = _isCircleEditShowingVertical ? "9:16 Dikey" : "16:9 Yatay";
+            TxtStatusBanner.Text = $"🎬 Yüklendi ({orientInfo}): {System.IO.Path.GetFileName(videoPath)} — 'Kes' (S) + 'Sil' (Del) ile ortadan kesin, 'Başı/Sonu Kırp' ile kırpın ve '4K Ultra Çıktı Al' ile kaydedin.";
+        }
+
+        private void ApplyCircleEditPlayerRotationTransform()
+        {
+            if (CircleEditMediaPlayer == null) return;
+            int metaRot = _currentProject?.MetadataRotationCwDeg ?? 0;
+            int userRot = _currentProject?.UserExtraRotationCwDeg ?? 0;
+            int totalRot = ((metaRot + userRot) % 360 + 360) % 360;
+            CircleEditMediaPlayer.LayoutTransform = totalRot == 0
+                ? System.Windows.Media.Transform.Identity
+                : new System.Windows.Media.RotateTransform(totalRot);
+        }
+
+        private void UpdateCircleEditHeaderOrientationBadges()
+        {
+            bool isVert = _isCircleEditShowingVertical;
+            int userRot = _currentProject?.UserExtraRotationCwDeg ?? 0;
+            string rotSuffix = userRot > 0 ? $" • ↻{userRot}°" : "";
+            if (TxtCircleEditActiveFile != null && !string.IsNullOrWhiteSpace(_activeCircleEditVideoPath))
+            {
+                TxtCircleEditActiveFile.Text = $"{System.IO.Path.GetFileName(_activeCircleEditVideoPath)} ({(isVert ? "9:16 Dikey" : "16:9 Yatay")}{rotSuffix})";
+            }
+
+            var activeBtnBg = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24));
+            var idleBtnBg = new SolidColorBrush(System.Windows.Media.Color.FromRgb(38, 26, 102));
+            if (BtnCircleEditView16x9 != null) BtnCircleEditView16x9.Background = !isVert ? activeBtnBg : idleBtnBg;
+            if (BtnCircleEditView9x16 != null) BtnCircleEditView9x16.Background = isVert ? activeBtnBg : idleBtnBg;
+        }
+
+        private void BtnRotateVideo90_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject == null || string.IsNullOrWhiteSpace(_activeCircleEditVideoPath))
+            {
+                TxtStatusBanner.Text = "Döndürmek için önce bir video yükleyin.";
+                return;
+            }
+            _currentProject.UserExtraRotationCwDeg = (_currentProject.UserExtraRotationCwDeg + 90) % 360;
+            _isCircleEditShowingVertical = !_isCircleEditShowingVertical;
+            ApplyCircleEditPlayerRotationTransform();
+            UpdateCircleEditHeaderOrientationBadges();
+            RedrawTimeline();
+            TxtStatusBanner.Text = $"↻ Video 90° döndürüldü (Toplam ek döndürme: {_currentProject.UserExtraRotationCwDeg}° • Format: {(_isCircleEditShowingVertical ? "9:16 Dikey" : "16:9 Yatay")}).";
         }
 
         private void CircleEditMediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
@@ -3372,7 +3429,133 @@ namespace CircleMixRecord
             Process.Start(new ProcessStartInfo { FileName = dir, UseShellExecute = true });
         }
 
-        // ======================= ÇOK KATMANLI TIMELINE VE SES DALGA FORMU =======================
+        // ======================= MANYETİK BİRLEŞİK TIMELINE (MAGNETIC RIPPLE TIMELINE) VE SES DALGA FORMU =======================
+
+        private struct MagneticClipSpan
+        {
+            public int ClipIndex;
+            public TimelineClip Clip;
+            public double MagStartSec;
+            public double MagEndSec;
+            public double X1;
+            public double X2;
+        }
+
+        private List<MagneticClipSpan> GetMagneticTimelineSpans(double headerW, double trackAreaW, out double netTotalDur)
+        {
+            var list = new List<MagneticClipSpan>();
+            double curMag = 0.0;
+
+            if (_currentProject?.Clips != null)
+            {
+                for (int i = 0; i < _currentProject.Clips.Count; i++)
+                {
+                    var c = _currentProject.Clips[i];
+                    if (c.IsDeleted || c.SourceDurationSec < 0.05) continue;
+
+                    double outDur = Math.Max(0.05, c.OutputDurationSec);
+                    list.Add(new MagneticClipSpan
+                    {
+                        ClipIndex = i,
+                        Clip = c,
+                        MagStartSec = curMag,
+                        MagEndSec = curMag + outDur
+                    });
+                    curMag += outDur;
+                }
+            }
+
+            netTotalDur = Math.Max(0.5, curMag > 0.05 ? curMag : (_currentProject?.TotalDurationSec ?? 10.0));
+            for (int i = 0; i < list.Count; i++)
+            {
+                var sp = list[i];
+                sp.X1 = headerW + (sp.MagStartSec / netTotalDur) * trackAreaW;
+                sp.X2 = headerW + (sp.MagEndSec / netTotalDur) * trackAreaW;
+                list[i] = sp;
+            }
+            return list;
+        }
+
+        private double SourceSecToMagneticSec(double srcSec, int preferredClipIdx, out double netTotalDur)
+        {
+            var spans = GetMagneticTimelineSpans(105, 1000, out netTotalDur);
+            if (spans.Count == 0) return Math.Clamp(srcSec, 0.0, netTotalDur);
+
+            foreach (var sp in spans)
+            {
+                if (sp.ClipIndex == preferredClipIdx &&
+                    srcSec >= sp.Clip.SourceStartSec - 0.05 &&
+                    srcSec <= sp.Clip.SourceEndSec + 0.05)
+                {
+                    double localOut = Math.Clamp(srcSec - sp.Clip.SourceStartSec, 0.0, sp.Clip.SourceDurationSec) / Math.Max(0.1, sp.Clip.SpeedMultiplier);
+                    return Math.Clamp(sp.MagStartSec + localOut, 0.0, netTotalDur);
+                }
+            }
+
+            foreach (var sp in spans)
+            {
+                if (srcSec >= sp.Clip.SourceStartSec - 0.05 &&
+                    srcSec <= sp.Clip.SourceEndSec + 0.05)
+                {
+                    double localOut = Math.Clamp(srcSec - sp.Clip.SourceStartSec, 0.0, sp.Clip.SourceDurationSec) / Math.Max(0.1, sp.Clip.SpeedMultiplier);
+                    return Math.Clamp(sp.MagStartSec + localOut, 0.0, netTotalDur);
+                }
+            }
+
+            foreach (var sp in spans)
+            {
+                if (sp.Clip.SourceStartSec >= srcSec)
+                    return sp.MagStartSec;
+            }
+
+            return netTotalDur;
+        }
+
+        private double MagneticSecToSourceSec(double magSec, out int clipIdx, out double netTotalDur)
+        {
+            var spans = GetMagneticTimelineSpans(105, 1000, out netTotalDur);
+            clipIdx = 0;
+            if (spans.Count == 0) return Math.Clamp(magSec, 0.0, netTotalDur);
+
+            double clampedMag = Math.Clamp(magSec, 0.0, netTotalDur);
+            for (int i = 0; i < spans.Count; i++)
+            {
+                var sp = spans[i];
+                if (clampedMag <= sp.MagEndSec + 0.001 || i == spans.Count - 1)
+                {
+                    clipIdx = sp.ClipIndex;
+                    double localMag = Math.Clamp(clampedMag - sp.MagStartSec, 0.0, Math.Max(0.01, sp.MagEndSec - sp.MagStartSec));
+                    double srcSec = sp.Clip.SourceStartSec + localMag * Math.Max(0.1, sp.Clip.SpeedMultiplier);
+                    return Math.Clamp(srcSec, sp.Clip.SourceStartSec, sp.Clip.SourceEndSec);
+                }
+            }
+
+            clipIdx = spans[^1].ClipIndex;
+            return spans[^1].Clip.SourceEndSec;
+        }
+
+        private void RenumberActiveClips()
+        {
+            if (_currentProject?.Clips == null) return;
+            _currentProject.Clips.RemoveAll(c => c.IsDeleted || c.SourceDurationSec < 0.04);
+
+            string baseName = !string.IsNullOrWhiteSpace(_activeCircleEditVideoPath)
+                ? System.IO.Path.GetFileNameWithoutExtension(_activeCircleEditVideoPath)
+                : (_currentProject.ProjectName ?? "Klip");
+            if (baseName.Length > 20) baseName = baseName.Substring(0, 20);
+
+            if (_currentProject.Clips.Count == 1)
+            {
+                _currentProject.Clips[0].Label = baseName;
+            }
+            else
+            {
+                for (int i = 0; i < _currentProject.Clips.Count; i++)
+                {
+                    _currentProject.Clips[i].Label = $"{baseName} #{i + 1}";
+                }
+            }
+        }
 
         private void BtnSplitClip_Click(object sender, RoutedEventArgs e)
         {
@@ -3381,42 +3564,195 @@ namespace CircleMixRecord
             for (int i = 0; i < _currentProject.Clips.Count; i++)
             {
                 var c = _currentProject.Clips[i];
-                if (_playheadSec > c.SourceStartSec + 0.15 && _playheadSec < c.SourceEndSec - 0.15)
+                if (c.IsDeleted) continue;
+                if (_playheadSec > c.SourceStartSec + 0.12 && _playheadSec < c.SourceEndSec - 0.12)
                 {
                     PushUndoSnapshot();
+                    double splitPoint = Math.Round(_playheadSec, 2);
                     double origEnd = c.SourceEndSec;
-                    c.SourceEndSec = Math.Round(_playheadSec, 2);
+                    bool hadPreviousCut = (i > 0 || c.SourceStartSec > 0.10);
+                    c.SourceEndSec = splitPoint;
 
                     var secondHalf = new TimelineClip
                     {
-                        Label = c.Label + " (Parça 2)",
-                        SourceStartSec = Math.Round(_playheadSec, 2),
+                        Label = c.Label,
+                        SourceStartSec = splitPoint,
                         SourceEndSec = origEnd,
                         SpeedMultiplier = c.SpeedMultiplier,
-                        IsDeleted = c.IsDeleted,
+                        IsDeleted = false,
                         IsSilentSegment = c.IsSilentSegment
                     };
                     _currentProject.Clips.Insert(i + 1, secondHalf);
-                    _selectedClipIndex = i + 1;
-                    TxtStatusBanner.Text = $"✂️ Klip {_playheadSec:0.00}. saniyeden ikiye bölündü (Silmek için Del tuşuna basın).";
+                    RenumberActiveClips();
+
+                    // Eğer kullanıcı ortadan bir bölümü çıkarmak için 2. kesimi yaptıysa, iki kesim arasındaki orta parçayı (i) seçili bırak ki Sil (Del) tuşu o orta parçayı silip kalanları birleştirsin!
+                    _selectedClipIndex = Math.Clamp(hadPreviousCut ? i : (i + 1), 0, _currentProject.Clips.Count - 1);
+                    var selClip = _currentProject.Clips[_selectedClipIndex];
+                    TxtStatusBanner.Text = $"✂️ {FormatShortTime(splitPoint)} noktasından kesildi! Seçili parça: {selClip.Label} ({FormatShortTime(selClip.SourceStartSec)}–{FormatShortTime(selClip.SourceEndSec)}) — Silip otomatik birleştirmek için 'Sil (Birleştir)' veya Del tuşuna basın.";
                     RedrawTimeline();
                     return;
                 }
             }
-            TxtStatusBanner.Text = "✂️ Bölmek için kırmızı çizgiyi (Playhead) klibin ortasında bir noktaya getirin ve S tuşuna basın.";
+            TxtStatusBanner.Text = "✂️ Bölmek için turuncu çizgiyi (Playhead) klibin içinde bir noktaya getirin ve 'Kes' (S) tuşuna basın.";
+        }
+
+        private void BtnTrimStartToPlayhead_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject?.Clips == null || _currentProject.Clips.Count == 0) return;
+            for (int i = 0; i < _currentProject.Clips.Count; i++)
+            {
+                var c = _currentProject.Clips[i];
+                if (c.IsDeleted) continue;
+                if (_playheadSec > c.SourceStartSec + 0.10 && _playheadSec < c.SourceEndSec - 0.15)
+                {
+                    PushUndoSnapshot();
+                    double oldStart = c.SourceStartSec;
+                    c.SourceStartSec = Math.Round(_playheadSec, 2);
+                    _playheadSec = c.SourceStartSec;
+                    RenumberActiveClips();
+                    _selectedClipIndex = Math.Clamp(i, 0, _currentProject.Clips.Count - 1);
+                    UpdateSilenceSummaryText();
+                    RedrawTimeline();
+                    TxtStatusBanner.Text = $"✂️ Klip başı kırpıldı ve manyetik birleştirildi ({FormatShortTime(oldStart)} ➔ {FormatShortTime(c.SourceStartSec)}). Geri almak için Ctrl+Z.";
+                    return;
+                }
+            }
+            TxtStatusBanner.Text = "✂️ Baştan kırpmak için turuncu çizgiyi klibin içinde kırpmak istediğiniz saniyeye getirin ve '✂ Başı Kırp' tuşuna basın.";
+        }
+
+        private void BtnTrimEndToPlayhead_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject?.Clips == null || _currentProject.Clips.Count == 0) return;
+            for (int i = 0; i < _currentProject.Clips.Count; i++)
+            {
+                var c = _currentProject.Clips[i];
+                if (c.IsDeleted) continue;
+                if (_playheadSec > c.SourceStartSec + 0.15 && _playheadSec < c.SourceEndSec - 0.10)
+                {
+                    PushUndoSnapshot();
+                    double oldEnd = c.SourceEndSec;
+                    c.SourceEndSec = Math.Round(_playheadSec, 2);
+                    RenumberActiveClips();
+                    _selectedClipIndex = Math.Clamp(i, 0, _currentProject.Clips.Count - 1);
+                    if (_selectedClipIndex + 1 < _currentProject.Clips.Count)
+                    {
+                        _playheadSec = _currentProject.Clips[_selectedClipIndex + 1].SourceStartSec;
+                    }
+                    else
+                    {
+                        _playheadSec = c.SourceEndSec;
+                    }
+                    if (CircleEditMediaPlayer != null && CircleEditMediaPlayer.Source != null)
+                    {
+                        try { CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec); } catch { }
+                    }
+                    UpdateSilenceSummaryText();
+                    RedrawTimeline();
+                    TxtStatusBanner.Text = $"✂️ Klip sonu kırpıldı ve manyetik birleştirildi ({FormatShortTime(c.SourceEndSec)} ➔ {FormatShortTime(oldEnd)} kesildi). Geri almak için Ctrl+Z.";
+                    return;
+                }
+            }
+            TxtStatusBanner.Text = "✂️ Sondan kırpmak için turuncu çizgiyi klibin içinde kırpmak istediğiniz bitiş saniyesine getirin ve '✂ Sonu Kırp' tuşuna basın.";
+        }
+
+        private async void BtnExportActiveKurgu4K_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentProject == null || string.IsNullOrWhiteSpace(_activeCircleEditVideoPath) || !File.Exists(_activeCircleEditVideoPath))
+            {
+                System.Windows.MessageBox.Show(
+                    "4K Ultra HD çıktı almak için önce soldaki listeden veya '+ İçe Aktar' butonundan bir video seçin.",
+                    "Circle Studio — 4K Ultra Kurgu",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            PauseCircleEditPlayer();
+            bool use4K = ChkCircle4KUltraUpscale?.IsChecked ?? true;
+            _currentProject.EnableNoiseSuppression = ChkAudioNoiseSuppress?.IsChecked ?? true;
+            _currentProject.EnableLufsNormalization = ChkAudioLufsNorm?.IsChecked ?? true;
+            _currentProject.BurnInSubtitles = ChkBurnInSubtitles?.IsChecked ?? true;
+
+            if (BtnExportActiveKurgu4K != null) BtnExportActiveKurgu4K.IsEnabled = false;
+            try
+            {
+                var (outPath, err) = await TimelineRenderService.ExportActiveTimeline4KUpscaleAsync(
+                    _currentProject,
+                    _activeCircleEditVideoPath,
+                    _isCircleEditShowingVertical,
+                    use4K,
+                    msg => Dispatcher.Invoke(() => TxtStatusBanner.Text = msg));
+
+                if (!string.IsNullOrWhiteSpace(outPath) && File.Exists(outPath))
+                {
+                    RefreshCircleEditFolderLists();
+                    string resDesc = _isCircleEditShowingVertical
+                        ? (use4K ? "2160×3840 (4K Dikey 9:16 • 60 FPS)" : "1080×1920 (Full HD Dikey 9:16 • 60 FPS)")
+                        : (use4K ? "3840×2160 (4K Yatay 16:9 • 60 FPS)" : "1920×1080 (Full HD Yatay 16:9 • 60 FPS)");
+
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $"/select,\"{outPath}\"",
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { }
+
+                    System.Windows.MessageBox.Show(
+                        $"Circle 4K Ultra HD Kurgu Çıktısı Hazır!\n\n" +
+                        $"• Dosya: {System.IO.Path.GetFileName(outPath)}\n" +
+                        $"• Çözünürlük & Format: {resDesc}\n" +
+                        $"• Birleştirilen Sağlam Parça: {_currentProject.Clips.Count(c => !c.IsDeleted)} parça (silinen yerler otomatik birleştirildi)\n\n" +
+                        $"Dosya klasörde seçili olarak açıldı.",
+                        "Circle Studio — 4K Ultra HD Çıktı Hazır",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show(
+                        "4K kurgu çıktısı üretilirken hata oluştu:\n\n" + (err ?? "Bilinmeyen hata"),
+                        "Circle Studio — Dışa Aktarma Hatası",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+            finally
+            {
+                if (BtnExportActiveKurgu4K != null) BtnExportActiveKurgu4K.IsEnabled = true;
+            }
         }
 
         private void BtnToggleDeleteClip_Click(object sender, RoutedEventArgs e)
         {
             if (_currentProject?.Clips == null || _selectedClipIndex < 0 || _selectedClipIndex >= _currentProject.Clips.Count) return;
+
+            var activeClips = _currentProject.Clips.Where(c => !c.IsDeleted && c.SourceDurationSec >= 0.05).ToList();
+            if (activeClips.Count <= 1)
+            {
+                TxtStatusBanner.Text = "⚠️ Tek kalan ana klip tamamen silinemez. İstemediğiniz bölümü önce 'Kes' (S) ile ayırıp silin veya '✂ Başı Kırp / Sonu Kırp' kullanın.";
+                return;
+            }
+
             PushUndoSnapshot();
-            var clip = _currentProject.Clips[_selectedClipIndex];
-            clip.IsDeleted = !clip.IsDeleted;
+            var removedClip = _currentProject.Clips[_selectedClipIndex];
+            string removedRange = $"{FormatShortTime(removedClip.SourceStartSec)}–{FormatShortTime(removedClip.SourceEndSec)}";
+            _currentProject.Clips.RemoveAt(_selectedClipIndex);
+            RenumberActiveClips();
+
+            _selectedClipIndex = Math.Clamp(_selectedClipIndex, 0, _currentProject.Clips.Count - 1);
+            _playheadSec = _currentProject.Clips[_selectedClipIndex].SourceStartSec;
+            if (CircleEditMediaPlayer != null && CircleEditMediaPlayer.Source != null)
+            {
+                try { CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec); } catch { }
+            }
+
             UpdateSilenceSummaryText();
             RedrawTimeline();
-            TxtStatusBanner.Text = clip.IsDeleted
-                ? $"🗑️ '{clip.Label}' silindi (Oynatırken ve çıktıda otomatik atlanır, Ctrl+Z ile geri alınabilir)."
-                : $"↩️ '{clip.Label}' geri getirildi.";
+            TxtStatusBanner.Text = $"🔗 Seçili parça ({removedRange}) silindi ve kalan parçalar boşluksuz otomatik birleştirildi! (Geri almak için Ctrl+Z)";
         }
 
         private void BtnSpeed8xSelectedClip_Click(object sender, RoutedEventArgs e)
@@ -3438,8 +3774,9 @@ namespace CircleMixRecord
             _currentProject.Clips.RemoveAt(_selectedClipIndex);
             _selectedClipIndex--;
             _currentProject.Clips.Insert(_selectedClipIndex, c);
+            RenumberActiveClips();
             RedrawTimeline();
-            TxtStatusBanner.Text = $"◀ '{c.Label}' sıralamada sola taşındı.";
+            TxtStatusBanner.Text = $"◀ '{c.Label}' sıralamada sola taşındı ve manyetik birleştirildi.";
         }
 
         private void BtnMoveClipRight_Click(object sender, RoutedEventArgs e)
@@ -3450,8 +3787,9 @@ namespace CircleMixRecord
             _currentProject.Clips.RemoveAt(_selectedClipIndex);
             _selectedClipIndex++;
             _currentProject.Clips.Insert(_selectedClipIndex, c);
+            RenumberActiveClips();
             RedrawTimeline();
-            TxtStatusBanner.Text = $"▶ '{c.Label}' sıralamada sağa taşındı.";
+            TxtStatusBanner.Text = $"▶ '{c.Label}' sıralamada sağa taşındı ve manyetik birleştirildi.";
         }
 
         private void BtnGrabEditorFrame_Click(object sender, RoutedEventArgs e)
@@ -3496,25 +3834,37 @@ namespace CircleMixRecord
             System.Windows.Point pt = e.GetPosition(TimelineCanvas);
             _trimDragMode = 0;
 
-            // V1 katmanı (Y: 22..56) üzerinde seçili klibin sol veya sağ Trim tutamacına mı tıklandı kontrol et
-            if (pt.Y >= 20 && pt.Y <= 58 && _currentProject?.Clips != null &&
-                _selectedClipIndex >= 0 && _selectedClipIndex < _currentProject.Clips.Count)
-            {
-                double trackAreaW = Math.Max(100, TimelineCanvas.ActualWidth - 115);
-                double totalDur = Math.Max(1.0, _currentProject.TotalDurationSec);
-                var sel = _currentProject.Clips[_selectedClipIndex];
-                double x1 = 105 + (sel.SourceStartSec / totalDur) * trackAreaW;
-                double x2 = 105 + (sel.SourceEndSec / totalDur) * trackAreaW;
+            const double headerW = 105;
+            double trackAreaW = Math.Max(100, TimelineCanvas.ActualWidth - headerW - 10);
+            var spans = GetMagneticTimelineSpans(headerW, trackAreaW, out double netTotalDur);
 
-                if (Math.Abs(pt.X - x1) <= 8)
+            // V1 katmanı (Y: 20..58) üzerinde bir klibin sol veya sağ Trim tutamacına mı tıklandı kontrol et
+            if (pt.Y >= 20 && pt.Y <= 58 && spans.Count > 0)
+            {
+                // Önce seçili klibin tutamaçlarını kontrol et
+                foreach (var sp in spans)
                 {
-                    PushUndoSnapshot();
-                    _trimDragMode = 1;
-                }
-                else if (Math.Abs(pt.X - x2) <= 8)
-                {
-                    PushUndoSnapshot();
-                    _trimDragMode = 2;
+                    if (sp.ClipIndex != _selectedClipIndex) continue;
+                    if (Math.Abs(pt.X - sp.X1) <= 8)
+                    {
+                        PushUndoSnapshot();
+                        _trimDragMode = 1;
+                        _trimDragStartMouseX = pt.X;
+                        _trimDragOrigSourceStart = sp.Clip.SourceStartSec;
+                        _trimDragOrigSourceEnd = sp.Clip.SourceEndSec;
+                        _trimDragInitialNetDur = netTotalDur;
+                        break;
+                    }
+                    if (Math.Abs(pt.X - sp.X2) <= 8)
+                    {
+                        PushUndoSnapshot();
+                        _trimDragMode = 2;
+                        _trimDragStartMouseX = pt.X;
+                        _trimDragOrigSourceStart = sp.Clip.SourceStartSec;
+                        _trimDragOrigSourceEnd = sp.Clip.SourceEndSec;
+                        _trimDragInitialNetDur = netTotalDur;
+                        break;
+                    }
                 }
             }
 
@@ -3532,20 +3882,35 @@ namespace CircleMixRecord
             if (_trimDragMode != 0 && _currentProject?.Clips != null &&
                 _selectedClipIndex >= 0 && _selectedClipIndex < _currentProject.Clips.Count)
             {
-                double trackAreaW = Math.Max(100, TimelineCanvas.ActualWidth - 115);
-                double totalDur = Math.Max(1.0, _currentProject.TotalDurationSec);
-                double norm = Math.Clamp((mouseX - 105) / trackAreaW, 0.0, 1.0);
-                double tSec = Math.Round(norm * totalDur, 2);
+                const double headerW = 105;
+                double trackAreaW = Math.Max(100, TimelineCanvas.ActualWidth - headerW - 10);
+                double rawTotalDur = Math.Max(1.0, _currentProject.TotalDurationSec);
                 var sel = _currentProject.Clips[_selectedClipIndex];
+
+                double deltaPx = mouseX - _trimDragStartMouseX;
+                double deltaMagSec = (deltaPx / trackAreaW) * Math.Max(0.5, _trimDragInitialNetDur);
+                double deltaSrcSec = deltaMagSec * Math.Max(0.1, sel.SpeedMultiplier);
 
                 if (_trimDragMode == 1)
                 {
-                    sel.SourceStartSec = Math.Clamp(tSec, 0.0, Math.Max(0.0, sel.SourceEndSec - 0.25));
+                    double minAllowed = 0.0;
+                    if (_selectedClipIndex > 0 && !_currentProject.Clips[_selectedClipIndex - 1].IsDeleted &&
+                        _currentProject.Clips[_selectedClipIndex - 1].SourceEndSec <= _trimDragOrigSourceStart + 0.05)
+                    {
+                        minAllowed = _currentProject.Clips[_selectedClipIndex - 1].SourceEndSec;
+                    }
+                    sel.SourceStartSec = Math.Round(Math.Clamp(_trimDragOrigSourceStart + deltaSrcSec, minAllowed, Math.Max(minAllowed, sel.SourceEndSec - 0.25)), 2);
                     _playheadSec = sel.SourceStartSec;
                 }
                 else if (_trimDragMode == 2)
                 {
-                    sel.SourceEndSec = Math.Clamp(tSec, sel.SourceStartSec + 0.25, totalDur);
+                    double maxAllowed = rawTotalDur;
+                    if (_selectedClipIndex + 1 < _currentProject.Clips.Count && !_currentProject.Clips[_selectedClipIndex + 1].IsDeleted &&
+                        _currentProject.Clips[_selectedClipIndex + 1].SourceStartSec >= _trimDragOrigSourceEnd - 0.05)
+                    {
+                        maxAllowed = _currentProject.Clips[_selectedClipIndex + 1].SourceStartSec;
+                    }
+                    sel.SourceEndSec = Math.Round(Math.Clamp(_trimDragOrigSourceEnd + deltaSrcSec, sel.SourceStartSec + 0.25, maxAllowed), 2);
                     _playheadSec = sel.SourceEndSec;
                 }
 
@@ -3553,8 +3918,10 @@ namespace CircleMixRecord
                 {
                     try { CircleEditMediaPlayer.Position = TimeSpan.FromSeconds(_playheadSec); } catch { }
                 }
-                TxtTimelineTimecode.Text = $"{FormatShortTime(_playheadSec)} / {FormatShortTime(totalDur)}";
-                TxtStatusBanner.Text = $"✂️ Klip Ucu Kırpılıyor ({sel.Label}): {sel.SourceStartSec:0.00}s — {sel.SourceEndSec:0.00}s";
+
+                double curMag = SourceSecToMagneticSec(_playheadSec, _selectedClipIndex, out double netDur);
+                TxtTimelineTimecode.Text = $"{FormatShortTime(curMag)} / {FormatShortTime(netDur)}";
+                TxtStatusBanner.Text = $"✂️ Manyetik Kırpma ({sel.Label}): Kaynak {FormatShortTime(sel.SourceStartSec)} — {FormatShortTime(sel.SourceEndSec)} (Net Süre: {FormatShortTime(netDur)})";
                 RedrawTimeline();
                 return;
             }
@@ -3574,21 +3941,14 @@ namespace CircleMixRecord
 
         private void UpdatePlayheadFromMouse(double mouseX)
         {
-            double w = Math.Max(100, TimelineCanvas.ActualWidth - 110);
-            double totalDur = Math.Max(1.0, _currentProject.TotalDurationSec);
-            double norm = Math.Clamp((mouseX - 105) / w, 0.0, 1.0);
-            _playheadSec = norm * totalDur;
+            const double headerW = 105;
+            double trackAreaW = Math.Max(100, TimelineCanvas.ActualWidth - headerW - 10);
+            double norm = Math.Clamp((mouseX - headerW) / trackAreaW, 0.0, 1.0);
 
-            // Tıklanan yerdeki klibi seç
-            for (int i = 0; i < _currentProject.Clips.Count; i++)
-            {
-                var c = _currentProject.Clips[i];
-                if (_playheadSec >= c.SourceStartSec && _playheadSec <= c.SourceEndSec)
-                {
-                    _selectedClipIndex = i;
-                    break;
-                }
-            }
+            GetMagneticTimelineSpans(headerW, trackAreaW, out double netTotalDur);
+            double targetMagSec = norm * netTotalDur;
+            _playheadSec = MagneticSecToSourceSec(targetMagSec, out int clickedClipIdx, out netTotalDur);
+            _selectedClipIndex = clickedClipIdx;
 
             if (CircleEditMediaPlayer != null && CircleEditMediaPlayer.Source != null)
             {
@@ -3599,7 +3959,7 @@ namespace CircleMixRecord
                 catch { }
             }
 
-            TxtTimelineTimecode.Text = $"{FormatShortTime(_playheadSec)} / {FormatShortTime(totalDur)}";
+            TxtTimelineTimecode.Text = $"{FormatShortTime(targetMagSec)} / {FormatShortTime(netTotalDur)}";
             UpdateLiveSubtitleOverlay();
             RedrawTimeline();
         }
@@ -3615,18 +3975,35 @@ namespace CircleMixRecord
             if (TimelineCanvas == null || TimelineCanvas.ActualWidth < 50 || TimelineCanvas.ActualHeight < 40)
                 return;
 
+            // Varsa silinmiş (IsDeleted) eski klipleri otomatik temizle ki Timeline'da asla '[Silindi]' ölü kutusu veya siyah boşluk kalmasın!
+            if (_currentProject?.Clips != null && _currentProject.Clips.Any(c => c.IsDeleted))
+            {
+                if (_currentProject.Clips.Count(c => !c.IsDeleted) >= 1)
+                {
+                    RenumberActiveClips();
+                    _selectedClipIndex = Math.Clamp(_selectedClipIndex, 0, Math.Max(0, _currentProject.Clips.Count - 1));
+                }
+                else
+                {
+                    foreach (var c in _currentProject.Clips) c.IsDeleted = false;
+                }
+            }
+
             TimelineCanvas.Children.Clear();
 
             double canvasW = TimelineCanvas.ActualWidth;
             double canvasH = TimelineCanvas.ActualHeight;
             const double headerW = 105;
             double trackAreaW = Math.Max(100, canvasW - headerW - 10);
-            double totalDur = Math.Max(1.0, _currentProject.TotalDurationSec);
+            double rawTotalDur = Math.Max(1.0, _currentProject?.TotalDurationSec ?? 10.0);
+
+            var spans = GetMagneticTimelineSpans(headerW, trackAreaW, out double netTotalDur);
 
             // 4 Katman Yüksekliği: Ruler (20px), V1 (34px), V2 (26px), T1 (24px), A1 Waveform (Kalan)
             double[] rowTops = { 0, 22, 60, 90, 118 };
             double[] rowHeights = { 20, 34, 26, 24, Math.Max(36, canvasH - 122) };
-            string[] rowLabels = { "ZAMAN", "V1 • 16:9", "V2 • 9:16", "T1 • METİN", "A1 • SES" };
+            string v1Label = _isCircleEditShowingVertical ? "V1 • 9:16" : "V1 • 16:9";
+            string[] rowLabels = { "ZAMAN", v1Label, "V2 • KADRAJ", "T1 • METİN", "A1 • SES" };
 
             for (int r = 0; r < rowLabels.Length; r++)
             {
@@ -3655,11 +4032,11 @@ namespace CircleMixRecord
                 TimelineCanvas.Children.Add(lbl);
             }
 
-            // 1. Zaman Cetveli (Ruler) & Marker Bayrakları
+            // 1. Manyetik Zaman Cetveli (Ruler: 0.0s .. netTotalDur) & Marker Bayrakları
             int tickCount = 10;
             for (int i = 0; i <= tickCount; i++)
             {
-                double t = (totalDur * i) / tickCount;
+                double t = (netTotalDur * i) / tickCount;
                 double x = headerW + (trackAreaW * i) / tickCount;
                 var tickTxt = new TextBlock
                 {
@@ -3673,69 +4050,92 @@ namespace CircleMixRecord
                 TimelineCanvas.Children.Add(tickTxt);
             }
 
-            foreach (var m in _currentProject.Markers)
+            if (_currentProject?.Markers != null)
             {
-                double mx = headerW + (m.TimeSec / totalDur) * trackAreaW;
-                var mFlag = new Border
+                foreach (var m in _currentProject.Markers)
                 {
-                    Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
-                    CornerRadius = new CornerRadius(3),
-                    Padding = new Thickness(4, 1, 4, 1),
-                    Child = new TextBlock { Text = m.Title, FontSize = 9, FontWeight = FontWeights.Bold, Foreground = System.Windows.Media.Brushes.White }
-                };
-                Canvas.SetLeft(mFlag, mx - 8);
-                Canvas.SetTop(mFlag, 1);
-                TimelineCanvas.Children.Add(mFlag);
+                    double mMagSec = SourceSecToMagneticSec(m.TimeSec, -1, out _);
+                    double mx = headerW + (mMagSec / netTotalDur) * trackAreaW;
+                    var mFlag = new Border
+                    {
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        CornerRadius = new CornerRadius(3),
+                        Padding = new Thickness(4, 1, 4, 1),
+                        Child = new TextBlock { Text = m.Title, FontSize = 9, FontWeight = FontWeights.Bold, Foreground = System.Windows.Media.Brushes.White }
+                    };
+                    Canvas.SetLeft(mFlag, mx - 8);
+                    Canvas.SetTop(mFlag, 1);
+                    TimelineCanvas.Children.Add(mFlag);
+                }
             }
 
-            // 2. V1 Katmanı: Video Klipleri (Konuşma / Timelapse Hızlı / Kesilen Sessizlik)
-            for (int i = 0; i < _currentProject.Clips.Count; i++)
+            // Timeline Özeti (Net Birleşik Süre & Kazanılan Süre)
+            if (TxtTimelineStats != null)
             {
-                var c = _currentProject.Clips[i];
-                double x1 = headerW + (c.SourceStartSec / totalDur) * trackAreaW;
-                double x2 = headerW + (c.SourceEndSec / totalDur) * trackAreaW;
-                double w = Math.Max(4, x2 - x1 - 2);
+                int activeCount = spans.Count;
+                double cutSavedSec = Math.Max(0.0, rawTotalDur - netTotalDur);
+                TxtTimelineStats.Text = (activeCount > 1 || cutSavedSec >= 0.4)
+                    ? $"🔗 {activeCount} Parça Manyetik Birleşik  •  Net Çıktı: {FormatShortTime(netTotalDur)} (Ham: {FormatShortTime(rawTotalDur)} • {FormatShortTime(cutSavedSec)} kırpıldı)"
+                    : $"Timeline • {activeCount} Parça • Net Süre: {FormatShortTime(netTotalDur)}";
+            }
 
-                System.Windows.Media.Color fillCol = c.IsDeleted
-                    ? System.Windows.Media.Color.FromArgb(110, 38, 26, 102)
+            // 2. V1 Katmanı: Manyetik Birleşik Video Klipleri (Sıfır Boşluk, Sıfır '[Silindi]' Kutusu)
+            for (int sIdx = 0; sIdx < spans.Count; sIdx++)
+            {
+                var sp = spans[sIdx];
+                var c = sp.Clip;
+                int i = sp.ClipIndex;
+                bool isSelected = (i == _selectedClipIndex);
+                double x1 = sp.X1;
+                double x2 = sp.X2;
+                double w = Math.Max(6, x2 - x1 - 1);
+
+                System.Windows.Media.Color fillCol = isSelected
+                    ? System.Windows.Media.Color.FromRgb(239, 95, 24)
                     : (c.SpeedMultiplier > 1.2
-                        ? System.Windows.Media.Color.FromRgb(239, 95, 24)
+                        ? System.Windows.Media.Color.FromRgb(186, 72, 18)
                         : System.Windows.Media.Color.FromRgb(38, 26, 102));
+
+                string speedTag = Math.Abs(c.SpeedMultiplier - 1.0) > 0.05 ? $" • {c.SpeedMultiplier:0.#}x" : "";
+                string clipText = w > 140
+                    ? $"{c.Label} ({FormatShortTime(c.SourceStartSec)}–{FormatShortTime(c.SourceEndSec)}){speedTag}"
+                    : $"{c.Label}{speedTag}";
 
                 var bdr = new Border
                 {
                     Width = w,
                     Height = rowHeights[1] - 4,
                     Background = new SolidColorBrush(fillCol),
-                    BorderBrush = new SolidColorBrush(i == _selectedClipIndex
+                    BorderBrush = new SolidColorBrush(isSelected
                         ? System.Windows.Media.Color.FromRgb(255, 255, 255)
-                        : System.Windows.Media.Color.FromRgb(52, 37, 128)),
-                    BorderThickness = new Thickness(i == _selectedClipIndex ? 1.5 : 1),
+                        : System.Windows.Media.Color.FromRgb(59, 42, 148)),
+                    BorderThickness = new Thickness(isSelected ? 1.8 : 1),
                     CornerRadius = new CornerRadius(4),
                     ClipToBounds = true,
+                    ToolTip = $"{c.Label} • Kaynak: {FormatShortTime(c.SourceStartSec)} – {FormatShortTime(c.SourceEndSec)} (Süre: {FormatShortTime(c.OutputDurationSec)})",
                     Child = new TextBlock
                     {
-                        Text = c.IsDeleted ? $"[Silindi] {c.Label}" : $"{c.Label} • {c.SpeedMultiplier:0.#}x",
+                        Text = clipText,
                         FontSize = 10,
                         FontWeight = FontWeights.SemiBold,
                         Foreground = System.Windows.Media.Brushes.White,
-                        Margin = new Thickness(6, 6, 2, 0)
+                        Margin = new Thickness(7, 6, 4, 0)
                     }
                 };
                 Canvas.SetLeft(bdr, x1);
                 Canvas.SetTop(bdr, rowTops[1] + 2);
                 TimelineCanvas.Children.Add(bdr);
 
-                // Seçili klibin sol ve sağ uçlarında sürüklenebilir Turuncu Trim Tutamaçları (#EF5F18)
-                if (i == _selectedClipIndex && !c.IsDeleted && w >= 14)
+                // Seçili klibin sol ve sağ uçlarında sürüklenebilir Beyaz/Turuncu Trim Tutamaçları
+                if (isSelected && w >= 16)
                 {
                     var leftHandle = new Border
                     {
                         Width = 5,
                         Height = rowHeights[1] - 4,
-                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        Background = System.Windows.Media.Brushes.White,
                         CornerRadius = new CornerRadius(3, 0, 0, 3),
-                        ToolTip = "Başlangıç noktasını kırpmak için sürükleyin"
+                        ToolTip = "Klip başlangıcını manyetik kırpmak için sürükleyin"
                     };
                     Canvas.SetLeft(leftHandle, x1);
                     Canvas.SetTop(leftHandle, rowTops[1] + 2);
@@ -3745,17 +4145,42 @@ namespace CircleMixRecord
                     {
                         Width = 5,
                         Height = rowHeights[1] - 4,
-                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        Background = System.Windows.Media.Brushes.White,
                         CornerRadius = new CornerRadius(0, 3, 3, 0),
-                        ToolTip = "Bitiş noktasını kırpmak için sürükleyin"
+                        ToolTip = "Klip bitişini manyetik kırpmak için sürükleyin"
                     };
                     Canvas.SetLeft(rightHandle, Math.Max(x1 + 5, x1 + w - 5));
                     Canvas.SetTop(rightHandle, rowTops[1] + 2);
                     TimelineCanvas.Children.Add(rightHandle);
                 }
+
+                // İki kesilmiş klip arasındaki Manyetik Birleşme Dikişi (🔗 Seam)
+                if (sIdx > 0)
+                {
+                    var seamBadge = new Border
+                    {
+                        Width = 14,
+                        Height = 14,
+                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
+                        BorderBrush = System.Windows.Media.Brushes.White,
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(7),
+                        ToolTip = $"Manyetik Birleşme Noktası ({FormatShortTime(sp.MagStartSec)})",
+                        Child = new TextBlock
+                        {
+                            Text = "🔗",
+                            FontSize = 7.5,
+                            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    };
+                    Canvas.SetLeft(seamBadge, x1 - 7);
+                    Canvas.SetTop(seamBadge, rowTops[1] + (rowHeights[1] - 14) / 2);
+                    TimelineCanvas.Children.Add(seamBadge);
+                }
             }
 
-            // 3. V2 Katmanı: Circle Portrait 9:16 Odak & Tıklama Keyframe Elmasları
+            // 3. V2 Katmanı: Circle Kadraj & Tıklama Keyframe Elmasları
             var v2Bar = new Border
             {
                 Width = trackAreaW,
@@ -3766,7 +4191,7 @@ namespace CircleMixRecord
                 CornerRadius = new CornerRadius(4),
                 Child = new TextBlock
                 {
-                    Text = $"9:16 Odak • {_currentProject.CameraKeyframes.Count} Keyframe • Uncrop %{_currentProject.UncropPercent:0}",
+                    Text = $"{(_isCircleEditShowingVertical ? "9:16 Dikey Kadraj" : "16:9 Yatay Kadraj")} • {_currentProject.CameraKeyframes.Count} Keyframe • Uncrop %{_currentProject.UncropPercent:0}",
                     FontSize = 10,
                     Foreground = System.Windows.Media.Brushes.White,
                     Opacity = 0.85,
@@ -3779,7 +4204,8 @@ namespace CircleMixRecord
 
             foreach (var kf in _currentProject.CameraKeyframes.Where(k => k.IsClickEvent))
             {
-                double kx = headerW + (kf.TimeSec / totalDur) * trackAreaW;
+                double kMag = SourceSecToMagneticSec(kf.TimeSec, -1, out _);
+                double kx = headerW + (kMag / netTotalDur) * trackAreaW;
                 var diamond = new TextBlock
                 {
                     Text = "◆",
@@ -3791,11 +4217,14 @@ namespace CircleMixRecord
                 TimelineCanvas.Children.Add(diamond);
             }
 
-            // 4. T1 Katmanı: Otomatik Altyazı Blokları
+            // 4. T1 Katmanı: Otomatik Altyazı Blokları (Manyetik Zaman Eşlemeli)
             foreach (var sub in _currentProject.Subtitles)
             {
-                double sx1 = headerW + (sub.StartSec / totalDur) * trackAreaW;
-                double sx2 = headerW + (sub.EndSec / totalDur) * trackAreaW;
+                double sm1 = SourceSecToMagneticSec(sub.StartSec, -1, out _);
+                double sm2 = SourceSecToMagneticSec(sub.EndSec, -1, out _);
+                if (sm2 - sm1 < 0.08) continue;
+                double sx1 = headerW + (sm1 / netTotalDur) * trackAreaW;
+                double sx2 = headerW + (sm2 / netTotalDur) * trackAreaW;
                 var subBdr = new Border
                 {
                     Width = Math.Max(8, sx2 - sx1 - 2),
@@ -3816,87 +4245,46 @@ namespace CircleMixRecord
                 TimelineCanvas.Children.Add(subBdr);
             }
 
-            // 5. A1 Katmanı: Mikrofon Ses Dalga Formu (Waveform) + Turuncu Sessizlik Bölgeleri
+            // 5. A1 Katmanı: Her Klibin Kendi Manyetik Konumuna Göre Kesilmiş & Birleşmiş Ses Dalga Formu (Waveform)
             double wfTop = rowTops[4];
             double wfH = rowHeights[4];
 
-            foreach (var sil in _currentProject.DetectedSilences)
-            {
-                double sx1 = headerW + (sil.StartSec / totalDur) * trackAreaW;
-                double sx2 = headerW + (sil.EndSec / totalDur) * trackAreaW;
-                var silRect = new System.Windows.Shapes.Rectangle
-                {
-                    Width = Math.Max(2, sx2 - sx1),
-                    Height = wfH,
-                    Fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(65, 239, 95, 24))
-                };
-                Canvas.SetLeft(silRect, sx1);
-                Canvas.SetTop(silRect, wfTop);
-                TimelineCanvas.Children.Add(silRect);
-            }
-
             var peaks = _currentProject.WaveformPeaks;
-            if (peaks != null && peaks.Count > 0)
+            if (peaks != null && peaks.Count > 0 && spans.Count > 0)
             {
-                int barCount = Math.Min(peaks.Count, (int)(trackAreaW / 3));
-                double barStep = trackAreaW / Math.Max(1, barCount);
-                for (int i = 0; i < barCount; i++)
+                foreach (var sp in spans)
                 {
-                    int srcIdx = (i * peaks.Count) / barCount;
-                    float pk = Math.Clamp(peaks[srcIdx], 0.04f, 1.0f);
-                    double bh = pk * (wfH - 6);
-                    var line = new System.Windows.Shapes.Rectangle
+                    double clipPixelW = Math.Max(4.0, sp.X2 - sp.X1);
+                    int barCount = Math.Max(1, (int)(clipPixelW / 3.0));
+                    double barStep = clipPixelW / barCount;
+
+                    int startPeakIdx = Math.Clamp((int)((sp.Clip.SourceStartSec / rawTotalDur) * peaks.Count), 0, peaks.Count - 1);
+                    int endPeakIdx = Math.Clamp((int)((sp.Clip.SourceEndSec / rawTotalDur) * peaks.Count), startPeakIdx + 1, peaks.Count);
+                    int peakSpan = Math.Max(1, endPeakIdx - startPeakIdx);
+
+                    for (int b = 0; b < barCount; b++)
                     {
-                        Width = Math.Max(1.5, barStep - 1),
-                        Height = bh,
-                        Fill = new SolidColorBrush(pk < 0.08f
-                            ? System.Windows.Media.Color.FromRgb(239, 95, 24)
-                            : System.Windows.Media.Color.FromRgb(255, 255, 255))
-                    };
-                    Canvas.SetLeft(line, headerW + i * barStep);
-                    Canvas.SetTop(line, wfTop + (wfH - bh) / 2);
-                    TimelineCanvas.Children.Add(line);
+                        int srcIdx = Math.Clamp(startPeakIdx + (b * peakSpan) / barCount, 0, peaks.Count - 1);
+                        float pk = Math.Clamp(peaks[srcIdx], 0.04f, 1.0f);
+                        double bh = pk * (wfH - 6);
+                        var line = new System.Windows.Shapes.Rectangle
+                        {
+                            Width = Math.Max(1.5, barStep - 1),
+                            Height = bh,
+                            Fill = new SolidColorBrush(pk < 0.08f
+                                ? System.Windows.Media.Color.FromRgb(239, 95, 24)
+                                : System.Windows.Media.Color.FromRgb(255, 255, 255))
+                        };
+                        Canvas.SetLeft(line, sp.X1 + b * barStep);
+                        Canvas.SetTop(line, wfTop + (wfH - bh) / 2);
+                        TimelineCanvas.Children.Add(line);
+                    }
                 }
             }
 
-            // 5B. Profesyonel Xfade / Beat-Sync Geçiş İşaretçileri (06.0s • 11.9s • 17.8s • 23.7s)
-            var transitionPoints = _currentProject.Clips.Count >= 2
-                ? _currentProject.Clips.Skip(1).Select(c => c.SourceStartSec).ToArray()
-                : new[] { 6.00, 11.90, 17.80, 23.70 };
-            foreach (double beatSec in transitionPoints)
-            {
-                if (beatSec > 0.5 && beatSec < totalDur - 0.5)
-                {
-                    double bx = headerW + (beatSec / totalDur) * trackAreaW;
-                    var beatLine = new Line
-                    {
-                        X1 = bx,
-                        Y1 = 18,
-                        X2 = bx,
-                        Y2 = canvasH,
-                        Stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
-                        StrokeThickness = 1.8,
-                        StrokeDashArray = new DoubleCollection { 3, 2 }
-                    };
-                    TimelineCanvas.Children.Add(beatLine);
-
-                    var beatBadge = new TextBlock
-                    {
-                        Text = $"🎬 XFADE {beatSec:0.0}s",
-                        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)),
-                        Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 95, 24)),
-                        FontSize = 9.5,
-                        FontWeight = FontWeights.Bold,
-                        Padding = new Thickness(4, 1, 4, 1)
-                    };
-                    Canvas.SetLeft(beatBadge, Math.Max(headerW, bx - 36));
-                    Canvas.SetTop(beatBadge, canvasH - 22);
-                    TimelineCanvas.Children.Add(beatBadge);
-                }
-            }
-
-            // 6. Turuncu Playhead Çizgisi
-            double px = headerW + (_playheadSec / totalDur) * trackAreaW;
+            // 6. Turuncu Manyetik Playhead Çizgisi
+            double curMagSec = SourceSecToMagneticSec(_playheadSec, _selectedClipIndex, out _);
+            double px = headerW + (curMagSec / netTotalDur) * trackAreaW;
             var playheadLine = new Line
             {
                 X1 = px,

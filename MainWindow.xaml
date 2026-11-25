@@ -72,6 +72,7 @@
                               Checked="ChkProView_Changed" Unchecked="ChkProView_Changed"
                               VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#B8B0DC"
                               ToolTip="Sahne, AI Kamera Stüdyosu, Mikrofon Pre-Amp ve 1+1+1 Eğitim Seti panellerini göster/gizle"/>
+                    <Button x:Name="BtnLicenseManager" Content="🔑 Lisanslar" Click="BtnLicenseManager_Click" Background="#261A66" BorderBrush="#EF5F18" Padding="11,5" Margin="0,0,6,0" Visibility="Collapsed" ToolTip="Tek Tuşla Uzaktan Lisans Üretme, Aktif Etme ve İptal Etme Yönetim Merkezi (Yalnızca Kurucu)"/>
                     <Button Content="🎓 1+1+1 Eğitim Paketi" Click="BtnOpenCoursePackage_Click" Background="#261A66" BorderBrush="#EF5F18" Padding="11,5" Margin="0,0,6,0" ToolTip="Circle &amp; thezencirs 1+1+1 Saatlik Eğitim Seti Dokümantasyon, Kurulum ve Ders Argümanları Klasörünü Aç"/>
                     <Button Content="Aç" Click="BtnOpenProject_Click" Padding="12,5" Margin="0,0,6,0" ToolTip="Video veya proje dosyası aç"/>
                     <Button Content="Klasör" Click="BtnOpenFolder_Click" Padding="12,5" Margin="0,0,6,0" ToolTip="Kayıt klasörünü aç"/>
@@ -459,8 +460,11 @@
                                     Background="#261A66" BorderBrush="#342580" Padding="10,4" FontSize="11" Margin="0,0,4,0"
                                     ToolTip="Videonun ses kanalını 48 kHz Stereo WAV olarak tek tıkla ayıklar"/>
                             <Button Content="⏪ Ters Çevir" Click="BtnReverseClip_Click"
-                                    Background="#261A66" BorderBrush="#342580" Padding="10,4" FontSize="11" Margin="0,0,8,0"
+                                    Background="#261A66" BorderBrush="#342580" Padding="10,4" FontSize="11" Margin="0,0,4,0"
                                     ToolTip="Videoyu 60 FPS geriye doğru (Reverse) çevirir"/>
+                            <Button x:Name="BtnRotateVideo90" Content="↻ 90° Döndür" Click="BtnRotateVideo90_Click"
+                                    Background="#261A66" BorderBrush="#EF5F18" Padding="10,4" FontSize="11" Margin="0,0,8,0"
+                                    ToolTip="Videoyu saat yönünde 90° döndürür ve Dikey/Yatay formatını otomatik düzeltir"/>
                             <Button x:Name="BtnCircleEditView16x9" Content="16:9" Click="BtnCircleEditSwitch16x9_Click" Background="#EF5F18" BorderBrush="#EF5F18" Padding="12,4" FontSize="11.5" Margin="0,0,4,0"/>
                             <Button x:Name="BtnCircleEditView9x16" Content="9:16" Click="BtnCircleEditSwitch9x16_Click" Background="#140E38" BorderBrush="#342580" Padding="12,4" FontSize="11.5"/>
                         </StackPanel>
@@ -511,13 +515,14 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- Sol: Kes, Sil, Geri Al -->
+                            <!-- Sol: Kes, Sil, Başı/Sonu Kırp, Geri Al -->
                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="Kes" Click="BtnSplitClip_Click" Padding="12,6" Margin="0,0,4,0" ToolTip="Seçili saniyeden böl (S / Ctrl+B)"/>
-                                <Button Content="Sil" Click="BtnToggleDeleteClip_Click" Padding="12,6" Margin="0,0,4,0" ToolTip="Seçili klibi sil (Delete)"/>
-                                <Button Content="Çoğalt" Click="BtnDuplicateClip_Click" Padding="11,6" Margin="0,0,4,0" ToolTip="Seçili klibi kopyala"/>
-                                <Button Content="Geri Al" Click="BtnUndoEdit_Click" Padding="11,6" Margin="0,0,4,0" ToolTip="Son işlemi geri al (Ctrl+Z)"/>
-                                <Button x:Name="BtnTogglePlayerMute" Content="Ses" Click="BtnTogglePlayerMute_Click" Padding="11,6" ToolTip="Oynatıcı sesini aç/kapat"/>
+                                <Button Content="✂ Başı Kırp" Click="BtnTrimStartToPlayhead_Click" Padding="9,6" Margin="0,0,4,0" ToolTip="Kırmızı çizginin solundaki başlangıç kısmını kırpar"/>
+                                <Button Content="Kes" Click="BtnSplitClip_Click" Padding="11,6" Margin="0,0,4,0" ToolTip="Seçili saniyeden böl (S / Ctrl+B)"/>
+                                <Button Content="Sil (Birleştir)" Click="BtnToggleDeleteClip_Click" Padding="11,6" Margin="0,0,4,0" ToolTip="Seçili orta parçayı siler ve kalan kısımları otomatik birleştirir (Delete)"/>
+                                <Button Content="✂ Sonu Kırp" Click="BtnTrimEndToPlayhead_Click" Padding="9,6" Margin="0,0,4,0" ToolTip="Kırmızı çizginin sağındaki bitiş kısmını kırpar"/>
+                                <Button Content="Geri Al" Click="BtnUndoEdit_Click" Padding="10,6" Margin="0,0,4,0" ToolTip="Son işlemi geri al (Ctrl+Z)"/>
+                                <Button x:Name="BtnTogglePlayerMute" Content="Ses" Click="BtnTogglePlayerMute_Click" Padding="10,6" ToolTip="Oynatıcı sesini aç/kapat"/>
                             </StackPanel>
 
                             <!-- Orta: Oynatma -->
@@ -960,9 +965,19 @@
                                     </StackPanel>
                                 </Border>
 
+                                <Border Background="#140E38" BorderBrush="#EF5F18" BorderThickness="1" CornerRadius="9" Padding="10" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="✦ Circle 4K Ultra AI Netleştirme &amp; Kurgu Çıktısı" FontSize="11.5" FontWeight="Bold" Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                                        <CheckBox x:Name="ChkCircle4KUltraUpscale" Content="✦ 4K Ultra AI Netleştirme + Gürültü Silme (60 FPS)" IsChecked="True" FontSize="10.5" Foreground="#FFFFFF" Margin="0,0,0,6"/>
+                                        <Button x:Name="BtnExportActiveKurgu4K" Content="🎬 4K Ultra HD Çıktı Al (Kurgula &amp; Birleştir)"
+                                                Click="BtnExportActiveKurgu4K_Click" Background="#EF5F18" BorderBrush="#EF5F18" FontWeight="Bold" Padding="10,8"
+                                                ToolTip="Kesilen/silinen kısımları otomatik birleştirir, kırpma, döndürme, hız, renk ve 4K Ultra netleştirmeyi uygulayarak videonun kendi formatında (9:16 veya 16:9) 4K 60 FPS MP4 üretir"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <Button Content="Dışa Aktar ve Paylaş"
-                                        Click="BtnExportAll_Click" Background="#EF5F18" BorderBrush="#EF5F18"
-                                        Padding="10,9"/>
+                                        Click="BtnExportAll_Click" Background="#261A66" BorderBrush="#342580"
+                                        Padding="10,8"/>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
@@ -1273,6 +1288,9 @@
                                VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11" Foreground="#B8B0DC"/>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="✦ 4K Ultra Çıktı Al" Click="BtnExportActiveKurgu4K_Click"
+                                Background="#EF5F18" BorderBrush="#EF5F18" FontWeight="Bold" Padding="12,4" Margin="0,0,10,0"
+                                ToolTip="Kesilen ve silinen yerleri otomatik birleştirip tüm efektlerle 4K Ultra HD (60 FPS) MP4 olarak kaydet"/>
                         <Border Background="#261A66" BorderBrush="#FFFFFF" BorderThickness="1" Width="9" Height="9" CornerRadius="2" Margin="4,0"/>
                         <TextBlock Text="Klip " FontSize="11" Foreground="#B8B0DC" VerticalAlignment="Center"/>
                         <Border Background="#EF5F18" Width="9" Height="9" CornerRadius="2" Margin="8,0,4,0"/>

@@ -935,13 +935,21 @@ namespace CircleMixRecord.Services
 
                 if (File.Exists(raw16Mkv))
                 {
-                    MuxVideoAndDualAudio(raw16Mkv, proj.MicrophoneWavPath, proj.SystemAudioWavPath, proj.Horizontal16x9VideoPath, usedBroadcastMic);
-                    try { File.Delete(raw16Mkv); } catch { }
+                    if (MuxVideoWithPreparedAudio(raw16Mkv, masterAudioM4a, proj.Horizontal16x9VideoPath))
+                    {
+                        try { File.Delete(raw16Mkv); } catch { }
+                    }
                 }
                 if (File.Exists(raw9Mkv))
                 {
-                    MuxVideoAndDualAudio(raw9Mkv, proj.MicrophoneWavPath, proj.SystemAudioWavPath, proj.Vertical9x16VideoPath, usedBroadcastMic);
-                    try { File.Delete(raw9Mkv); } catch { }
+                    if (MuxVideoWithPreparedAudio(raw9Mkv, masterAudioM4a, proj.Vertical9x16VideoPath))
+                    {
+                        try { File.Delete(raw9Mkv); } catch { }
+                    }
+                }
+                if (!string.IsNullOrEmpty(masterAudioM4a) && File.Exists(masterAudioM4a))
+                {
+                    try { File.Delete(masterAudioM4a); } catch { }
                 }
 
                 // Başlangıç için tüm videoyu kapsayan 1 ana Timeline klibi oluştur
@@ -1099,7 +1107,7 @@ namespace CircleMixRecord.Services
             }
         }
 
-        private static void MuxVideoAndDualAudio(string videoMkv, string micWav, string sysWav, string outMp4, bool micAlreadyDenoised)
+        private static string PrepareMasterAudioTrack(string projectDir, string micWav, string sysWav, bool micAlreadyDenoised)
         {
             string ff = HardwareEncoderService.GetFfmpegPath();
             string outM4a = Path.Combine(projectDir, "_temp_master_audio.m4a");
@@ -1113,37 +1121,20 @@ namespace CircleMixRecord.Services
                 ? "highpass=f=80,acompressor=threshold=-20dB:ratio=3:attack=10:release=200:makeup=3dB,alimiter=limit=0.95,aresample=48000"
                 : "highpass=f=90,afftdn=nf=-25:tn=1,acompressor=threshold=-20dB:ratio=3:attack=10:release=200:makeup=3dB,alimiter=limit=0.95,aresample=48000";
 
-            // Ses Mastering Zinciri:
-            //  - Circle Broadcast (AI gürültü temizlenmiş) → ikinci kez gürültü silme YOK (robotik ses yapar), hafif kompresör.
-            //  - Dahili/ham mikrofon → uyarlamalı FFT gürültü silme (afftdn tn=1) + kompresör.
-            //  - Her ikisinde de -16 LUFS yayın standardı ses seviyesi (loudnorm) → kısık/patlak ses yok.
-            string micChain = micAlreadyDenoised
-                ? "highpass=f=80,acompressor=threshold=-20dB:ratio=3:attack=10:release=200:makeup=2dB,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000"
-                : "highpass=f=90,afftdn=nf=-28:tn=1,acompressor=threshold=-20dB:ratio=3:attack=10:release=200:makeup=2dB,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000";
-
             string args;
             if (hasMic && hasSys)
             {
-                args = $"-y -hide_banner -loglevel error -i \"{videoMkv}\" -i \"{micWav}\" -i \"{sysWav}\" " +
-                       $"-filter_complex \"[1:a]{micChain}[mic];[2:a]aresample=48000,volume=0.55[sys];[mic][sys]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95[mix]\" " +
-                       "-map 0:v:0 -map \"[mix]\" " +
-                       "-c:v copy -c:a aac -b:a 192k -movflags +faststart " +
-                       $"\"{outMp4}\"";
+                args = $"-y -hide_banner -loglevel error -threads 8 -i \"{micWav}\" -i \"{sysWav}\" " +
+                       $"-filter_complex \"[0:a]{micChain}[mic];[1:a]aresample=48000,volume=0.55[sys];[mic][sys]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95[mix]\" " +
+                       $" -map \"[mix]\" -c:a aac -b:a 192k \"{outM4a}\"";
             }
             else if (hasMic)
             {
-                args = $"-y -hide_banner -loglevel error -i \"{videoMkv}\" -i \"{micWav}\" " +
-                       $"-af \"{micChain}\" " +
-                       $"-c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart \"{outMp4}\"";
-            }
-            else if (hasSys)
-            {
-                args = $"-y -hide_banner -loglevel error -i \"{videoMkv}\" -i \"{sysWav}\" -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart \"{outMp4}\"";
+                args = $"-y -hide_banner -loglevel error -threads 8 -i \"{micWav}\" -af \"{micChain}\" -c:a aac -b:a 192k \"{outM4a}\"";
             }
             else
             {
-                // Mikrofon/Sistem sesi kapalıysa bile Circle Edit Timeline oynatıcısı ve FFmpeg filtreleri için sessiz AAC stereo kanal ekle
-                args = $"-y -hide_banner -loglevel error -i \"{videoMkv}\" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -b:a 128k -shortest -movflags +faststart \"{outMp4}\"";
+                args = $"-y -hide_banner -loglevel error -threads 8 -i \"{sysWav}\" -c:a aac -b:a 192k \"{outM4a}\"";
             }
 
             try

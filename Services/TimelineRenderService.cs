@@ -738,7 +738,90 @@ namespace CircleMixRecord.Services
                 filters.Add("vignette=PI/4");
             }
 
+            if (project.Enable4KUltraUpscale)
+            {
+                // Circle 4K Ultra AI Netleştirme & Upscale: Zamansal gürültü temizleme + Mikro-kontrast keskinleştirme
+                filters.Add("hqdn3d=1.6:1.2:2.5:2.0,unsharp=5:5:0.85:3:3:0.20");
+            }
+
             return filters.Count > 0 ? "," + string.Join(",", filters) : "";
+        }
+
+        /// <summary>
+        /// Kurgu (Circle Edit) ekranında kesilen, ortadan silinip otomatik birleştirilen, baştan/sondan kırpılan,
+        /// döndürülen ve renk/hız/efekt uygulanan aktif videoyu kendi doğal formatında (9:16 Dikey ise 2160x3840 4K,
+        /// 16:9 Yatay ise 3840x2160 4K • 60 FPS) tek tıkla dışa aktarır.
+        /// </summary>
+        public static async Task<(string OutputPath, string Error)> ExportActiveTimeline4KUpscaleAsync(
+            CmrProject project,
+            string activeVideoPath,
+            bool isVertical,
+            bool use4KUpscale,
+            Action<string> onProgress = null)
+        {
+            if (project == null) return (null, "Proje bulunamadı.");
+            string srcVideo = !string.IsNullOrWhiteSpace(activeVideoPath) && File.Exists(activeVideoPath)
+                ? activeVideoPath
+                : (isVertical ? project.Vertical9x16VideoPath : project.Horizontal16x9VideoPath);
+
+            if (string.IsNullOrWhiteSpace(srcVideo) || !File.Exists(srcVideo))
+                return (null, "Dışa aktarılacak video dosyası bulunamadı.");
+
+            project.Enable4KUltraUpscale = use4KUpscale;
+
+            var activeClips = project.Clips
+                .Where(c => !c.IsDeleted && c.SourceDurationSec >= 0.08)
+                .ToList();
+
+            if (activeClips.Count == 0)
+            {
+                var info = ProbeMediaInfo(srcVideo);
+                activeClips.Add(new TimelineClip
+                {
+                    Label = Path.GetFileNameWithoutExtension(srcVideo),
+                    SourceStartSec = 0,
+                    SourceEndSec = Math.Max(1.0, info.DurationSec > 0.5 ? info.DurationSec : project.TotalDurationSec),
+                    SpeedMultiplier = 1.0
+                });
+            }
+
+            int targetW = isVertical ? (use4KUpscale ? 2160 : 1080) : (use4KUpscale ? 3840 : 1920);
+            int targetH = isVertical ? (use4KUpscale ? 3840 : 1920) : (use4KUpscale ? 2160 : 1080);
+
+            string targetDir = isVertical
+                ? HardwareEncoderService.GetVerticalRecordingsDir()
+                : HardwareEncoderService.GetHorizontalRecordingsDir();
+            string exportDir = HardwareEncoderService.GetEditedExportsDir();
+
+            string baseName = Path.GetFileNameWithoutExtension(srcVideo);
+            string resTag = use4KUpscale ? "4K_UltraHD" : "1080p";
+            string orientTag = isVertical ? "Dikey_9x16" : "Yatay_16x9";
+            string stamp = DateTime.Now.ToString("HHmmss");
+            string outMp4 = Path.Combine(exportDir, $"{baseName}_CircleKurgu_{orientTag}_{resTag}_{stamp}.mp4");
+
+            onProgress?.Invoke($"🎬 Circle 4K Ultra Kurgu & Netleştirme ({targetW}×{targetH} • 60 FPS • {activeClips.Count} birleşik parça) işleniyor...");
+
+            string err = null;
+            bool ok = await Task.Run(() => RenderTimelineClipsToFile(
+                project,
+                srcVideo,
+                activeClips,
+                targetW,
+                targetH,
+                project.EnableNoiseSuppression,
+                project.EnableLufsNormalization,
+                outMp4,
+                out err));
+
+            if (ok && File.Exists(outMp4))
+            {
+                try { File.Copy(outMp4, Path.Combine(targetDir, Path.GetFileName(outMp4)), true); } catch { }
+                onProgress?.Invoke($"✅ 4K Ultra HD kurgulu video hazır: {Path.GetFileName(outMp4)}");
+                return (outMp4, null);
+            }
+
+            LastExportError = err;
+            return (null, err ?? "4K kurgu çıktısı üretilemedi.");
         }
 
         private static bool RenderTimelineClipsToFile(
@@ -761,6 +844,17 @@ namespace CircleMixRecord.Services
             var fc = new StringBuilder();
             double totalOutSec = 0;
 
+            int extraRot = ((project?.UserExtraRotationCwDeg ?? 0) % 360 + 360) % 360;
+            string rotFilter = extraRot switch
+            {
+                90 => ",transpose=1",
+                180 => ",hflip,vflip",
+                270 => ",transpose=2",
+                _ => ""
+            };
+            int effSrcW = (extraRot == 90 || extraRot == 270) ? srcInfo.Height : srcInfo.Width;
+            int effSrcH = (extraRot == 90 || extraRot == 270) ? srcInfo.Width : srcInfo.Height;
+
             for (int i = 0; i < clipsToUse.Count; i++)
             {
                 var c = clipsToUse[i];
@@ -771,7 +865,7 @@ namespace CircleMixRecord.Services
                 double outDur = Math.Max(0.04, (c.SourceEndSec - c.SourceStartSec) / spd);
                 totalOutSec += outDur;
 
-                fc.Append($"[0:v]trim=start={st}:end={en},setpts={ptsFactor}*(PTS-STARTPTS)[v{i}];");
+                fc.Append($"[0:v]trim=start={st}:end={en},setpts={ptsFactor}*(PTS-STARTPTS){rotFilter}[v{i}];");
                 if (srcInfo.HasAudio)
                 {
                     fc.Append($"[0:a]atrim=start={st}:end={en},asetpts=PTS-STARTPTS,{BuildAtempoChain(spd)},aresample=48000,aformat=sample_rates=48000:channel_layouts=stereo[a{i}];");
@@ -796,7 +890,7 @@ namespace CircleMixRecord.Services
             string extraInputArgs = "";
             int nextInputIdx = 1;
             string currentVideoPad = "[vbase]";
-            fc.Append(BuildFitFilter("[vcat]", srcInfo.Width, srcInfo.Height, targetW, targetH, colorFilter, currentVideoPad, "fit"));
+            fc.Append(BuildFitFilter("[vcat]", effSrcW, effSrcH, targetW, targetH, colorFilter, currentVideoPad, "fit"));
 
             // Görüntü / Video Bindirme (PIP Overlay) & Maskeleme
             if (project != null && !string.IsNullOrWhiteSpace(project.PipOverlayMediaPath) && File.Exists(project.PipOverlayMediaPath))
@@ -979,10 +1073,12 @@ namespace CircleMixRecord.Services
         {
             public int Width;
             public int Height;
+            public int RotationCwDeg;
             public double DurationSec;
             public double Fps;
             public bool HasAudio;
             public bool HasVideo;
+            public bool IsVertical => Height > Width;
         }
 
         /// <summary>ffmpeg -i çıktısından genişlik/yükseklik (döndürme dahil), süre, fps ve ses varlığını okur.</summary>
@@ -1031,12 +1127,15 @@ namespace CircleMixRecord.Services
                     if (line.Contains("Audio:")) info.HasAudio = true;
                 }
 
-                // Telefon videolarında döndürme (ffmpeg otomatik döndürür → genişlik/yükseklik yer değiştirir)
+                // Telefon videolarında döndürme (Display Matrix: rotation of -90.00 degrees -> 90° CW dikey video)
                 var mRot = System.Text.RegularExpressions.Regex.Match(err, @"rotation of\s*(-?\d+(?:\.\d+)?)\s*degrees");
                 if (mRot.Success)
                 {
-                    double rot = Math.Abs(double.Parse(mRot.Groups[1].Value, CultureInfo.InvariantCulture)) % 180.0;
-                    if (Math.Abs(rot - 90.0) < 1.0) (info.Width, info.Height) = (info.Height, info.Width);
+                    double rawDeg = double.Parse(mRot.Groups[1].Value, CultureInfo.InvariantCulture);
+                    int cw = ((int)Math.Round(-rawDeg) % 360 + 360) % 360;
+                    info.RotationCwDeg = (cw / 90) * 90;
+                    if (info.RotationCwDeg == 90 || info.RotationCwDeg == 270)
+                        (info.Width, info.Height) = (info.Height, info.Width);
                 }
             }
             catch { }

@@ -306,6 +306,11 @@ namespace CircleMixRecord.Models
         public double AdjustSharpen { get; set; } = 0.0;           // 0 .. 100
         public double AdjustVignette { get; set; } = 0.0;          // 0 .. 100
 
+        // Otomatik Yön (9:16 / 16:9), Döndürme (0°/90°/180°/270°) & Circle 4K Ultra AI Netleştirme / Upscale
+        public int MetadataRotationCwDeg { get; set; } = 0;
+        public int UserExtraRotationCwDeg { get; set; } = 0;
+        public bool Enable4KUltraUpscale { get; set; } = true;
+
         // Zaman Çizelgesi Verileri
         public List<CameraKeyframe> CameraKeyframes { get; set; } = new();
         public List<SilenceRegion> DetectedSilences { get; set; } = new();
